@@ -1,0 +1,113 @@
+#!/bin/bash
+
+IPSET="/usr/sbin/ipset"
+IPTABLES="/usr/sbin/iptables"
+WGET="/usr/bin/wget"
+
+IPSET_NAME="blocked_countries"
+IPSET_DIR="/etc/ipset"
+CONFIG_FILE="$IPSET_DIR/blocked_countries.conf"
+TRACKER_FILE="$IPSET_DIR/blocked_countries_list.txt"
+
+init_system() {
+    mkdir -p "$IPSET_DIR"
+    touch "$TRACKER_FILE"
+
+    if ! $IPSET list "$IPSET_NAME" > /dev/null 2>&1; then
+        $IPSET create "$IPSET_NAME" hash:net
+    fi
+
+    if ! $IPTABLES -C INPUT -m set --match-set "$IPSET_NAME" src -j DROP 2>/dev/null; then
+        $IPTABLES -I INPUT 1 -m set --match-set "$IPSET_NAME" src -j DROP
+    fi
+}
+
+block_country() {
+    local country=$(echo "$1" | tr '[:upper:]' '[:lower:]')
+    if [ -z "$country" ]; then
+        echo "Erreur : Code pays vide."
+        exit 1
+    fi
+
+    init_system
+
+    if grep -Fxq "$country" "$TRACKER_FILE"; then
+        echo "Le pays ${country^^} est deja bloque."
+        exit 0
+    fi
+
+    local url="https://www.ipdeny.com/ipblocks/data/countries/${country}.zone"
+    local zones=$($WGET -qO- "$url")
+
+    if [ -z "$zones" ]; then
+        echo "Erreur : Impossible de recuperer les donnees pour '${country^^}'."
+        exit 1
+    fi
+
+    while IFS= read -r ip; do
+        if [ -n "$ip" ]; then
+            $IPSET add "$IPSET_NAME" "$ip" -exist > /dev/null 2>&1
+        fi
+    done <<< "$zones"
+
+    echo "$country" >> "$TRACKER_FILE"
+    $IPSET save > "$CONFIG_FILE"
+    echo "Succes ${country^^}"
+}
+
+unblock_country() {
+    local country=$(echo "$1" | tr '[:upper:]' '[:lower:]')
+    if [ -z "$country" ]; then
+        echo "Erreur : Code pays vide."
+        exit 1
+    fi
+
+    if [ ! -f "$TRACKER_FILE" ]; then
+        echo "Aucun pays enregistre."
+        exit 1
+    fi
+
+    local url="https://www.ipdeny.com/ipblocks/data/countries/${country}.zone"
+    local zones=$($WGET -qO- "$url")
+
+    if [ -n "$zones" ]; then
+        while IFS= read -r ip; do
+            if [ -n "$ip" ]; then
+                $IPSET del "$IPSET_NAME" "$ip" > /dev/null 2>&1
+            fi
+        done <<< "$zones"
+    fi
+
+    # Retirer systématiquement le pays du fichier de suivi (insensible à la casse/espaces)
+    sed -i "s/^${country}$//g" "$TRACKER_FILE"
+    sed -i '/^$/d' "$TRACKER_FILE"
+
+    if [ ! -s "$TRACKER_FILE" ]; then
+        $IPSET flush "$IPSET_NAME" > /dev/null 2>&1
+    fi
+
+    $IPSET save > "$CONFIG_FILE"
+    echo "Debloque ${country^^}"
+}
+
+list_countries() {
+    if [ ! -f "$TRACKER_FILE" ] || [ ! -s "$TRACKER_FILE" ]; then
+        exit 0
+    fi
+    cat "$TRACKER_FILE"
+}
+
+case "$1" in
+    block)
+        block_country "$2"
+        ;;
+    unblock)
+        unblock_country "$2"
+        ;;
+    list)
+        list_countries
+        ;;
+    *)
+        exit 1
+        ;;
+esac
