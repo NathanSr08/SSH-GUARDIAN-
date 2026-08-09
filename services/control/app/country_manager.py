@@ -17,7 +17,11 @@ class CountryManager:
     def country_code(self, value: str) -> str | None:
         return self.control_manager.country_code(value)
 
-    def block(self, country: str) -> str:
+    def block(
+        self,
+        country: str,
+        source: str = "unknown",
+    ) -> str:
         code = self.country_code(country)
 
         if not code:
@@ -49,6 +53,7 @@ class CountryManager:
                 ).isoformat(),
                 "country_code": code.upper(),
                 "reason": "manual_country_block",
+                "source": source,
             },
         )
 
@@ -97,7 +102,11 @@ class CountryManager:
 
         return sorted(ips)
 
-    def unblock(self, country: str) -> str:
+    def unblock(
+        self,
+        country: str,
+        source: str = "unknown",
+    ) -> str:
         code = self.country_code(country)
 
         if not code:
@@ -293,6 +302,7 @@ class CountryManager:
                 "country_code": code.upper(),
                 "reason": "manual_country_unblock",
                 "unbanned_count": len(unbanned),
+                "source": source,
             },
         )
 

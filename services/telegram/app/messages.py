@@ -220,7 +220,7 @@ def format_firewall_event(
         return (
             "🌍 <b>Pays bloqué</b>\n\n"
             f"🛡 Pays : <b>{country_code}</b>\n"
-            "📡 Source : Control / Panel\n\n"
+            f"📡 Source : <b>{client.escape(str(event.get('source') or 'unknown').title())}</b>\n\n"
             "Toute nouvelle connexion détectée "
             "depuis ce pays sera automatiquement bloquée."
         )
@@ -239,6 +239,7 @@ def format_firewall_event(
         return (
             "🔓 <b>Pays débloqué</b>\n\n"
             f"🌍 Pays : <b>{country_code}</b>\n"
+            f"📡 Source : <b>{client.escape(str(event.get('source') or 'unknown').title())}</b>\n"
             f"✅ IP débannies : <b>{count}</b>"
         )
 

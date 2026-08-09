@@ -14,8 +14,11 @@ class ControlClient:
         command: str,
         args=None,
         timeout: int = 10,
+        source: str = "api",
     ):
-        request_id = str(uuid.uuid4())
+        request_id = str(
+            uuid.uuid4()
+        )
 
         reply_key = (
             f"control.reply:{request_id}"
@@ -27,6 +30,7 @@ class ControlClient:
                 "request_id": request_id,
                 "command": command,
                 "args": args or [],
+                "source": source,
             },
         )
 
@@ -52,4 +56,6 @@ class ControlClient:
                 )
             )
 
-        return payload.get("result")
+        return payload.get(
+            "result"
+        )

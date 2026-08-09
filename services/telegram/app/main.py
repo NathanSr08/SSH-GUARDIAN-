@@ -73,6 +73,24 @@ def notifications(
 
         for message_id, payload in messages:
             try:
+                #
+                # Une action venant directement
+                # d'une commande Telegram possède déjà
+                # sa réponse RPC.
+                #
+                # On évite donc une deuxième notification.
+                #
+                if (
+                    payload.get("source")
+                    == "telegram"
+                ):
+                    bus.ack(
+                        Settings.FIREWALL_EVENTS_STREAM,
+                        "telegram-firewall",
+                        message_id,
+                    )
+                    continue
+
                 message = (
                     format_firewall_event(
                         telegram,

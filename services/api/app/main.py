@@ -398,11 +398,19 @@ def unban(
 )
 def block_country(
     country: str,
+    source: str = Query(default="api"),
 ):
     try:
+        if source not in {
+            "api",
+            "panel",
+        }:
+            source = "api"
+
         result = control.execute(
             "block",
             [country],
+            source=source,
         )
 
         return {
@@ -422,11 +430,19 @@ def block_country(
 )
 def unblock_country(
     country: str,
+    source: str = Query(default="api"),
 ):
     try:
+        if source not in {
+            "api",
+            "panel",
+        }:
+            source = "api"
+
         result = control.execute(
             "unblock",
             [country],
+            source=source,
         )
 
         return {

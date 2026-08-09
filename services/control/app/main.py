@@ -63,6 +63,7 @@ def main():
     def execute(
         command,
         args,
+        source="unknown",
     ):
         if command == "stats":
             return manager.stats()
@@ -124,12 +125,14 @@ def main():
 
         if command == "block":
             return countries.block(
-                args[0]
+                args[0],
+                source=source,
             )
 
         if command == "unblock":
             return countries.unblock(
-                args[0]
+                args[0],
+                source=source,
             )
 
         if command == "countries":
@@ -160,10 +163,16 @@ def main():
                 or []
             )
 
+            source = (
+                payload.get("source")
+                or "unknown"
+            )
+
             try:
                 result = execute(
                     command,
                     args,
+                    source=source,
                 )
 
                 reply(

@@ -215,7 +215,7 @@ def unban(ip: str):
 def block_country(country: str):
     return request_api(
         "POST",
-        f"/block-country/{country}",
+        f"/block-country/{country}?source=panel",
     )
 
 
@@ -226,7 +226,7 @@ def block_country(country: str):
 def unblock_country(country: str):
     return request_api(
         "POST",
-        f"/unblock-country/{country}",
+        f"/unblock-country/{country}?source=panel",
     )
 
 
