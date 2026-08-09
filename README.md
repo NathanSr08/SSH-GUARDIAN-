@@ -2,9 +2,9 @@
 
 # 🛡️ SSH Guardian V2
 
-### Surveillance SSH en temps réel, détection des menaces et réponse automatisée
+### Protection SSH en temps réel pour serveurs Linux
 
-**Un mini Security Operations Center (SOC) modulaire pour protéger et superviser les accès SSH d'un serveur Linux.**
+Surveillance · GeoIP · Firewall · Telegram · API · Dashboard
 
 ![Python](https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python&logoColor=white)
 ![Linux](https://img.shields.io/badge/Linux-Debian%20%7C%20Ubuntu-FCC624?logo=linux&logoColor=black)
@@ -12,277 +12,120 @@
 ![FastAPI](https://img.shields.io/badge/API-FastAPI-009688?logo=fastapi&logoColor=white)
 ![Telegram](https://img.shields.io/badge/Telegram-Bot-26A5E4?logo=telegram&logoColor=white)
 ![systemd](https://img.shields.io/badge/systemd-Services-000000?logo=linux&logoColor=white)
-![Tests](https://img.shields.io/badge/Tests-pytest-0A9EDC?logo=pytest&logoColor=white)
-
-<br>
-
-**SURVEILLER · DÉTECTER · ENRICHIR · BLOQUER · NOTIFIER · INVESTIGUER**
+![pytest](https://img.shields.io/badge/tests-pytest-0A9EDC?logo=pytest&logoColor=white)
 
 </div>
 
 ---
 
-## 📖 Présentation
+## 👋 À quoi sert SSH Guardian ?
 
-**SSH Guardian V2** est une plateforme de sécurité conçue pour surveiller et protéger un serveur SSH en temps réel.
+SSH Guardian V2 transforme les logs OpenSSH d'un serveur Linux en événements de sécurité exploitables.
 
-Le projet analyse l'activité OpenSSH du serveur afin de détecter notamment :
+Il peut notamment :
 
-- les nouvelles connexions SSH ;
-- les authentifications échouées ;
-- les utilisateurs invalides ;
-- les connexions interrompues avant authentification ;
-- les authentifications réussies ;
-- les adresses IP suspectes ;
-- les attaques répétées ;
-- les connexions provenant de pays bloqués.
-
-Chaque adresse IP peut être enrichie avec :
-
-- son pays ;
-- son code ISO ;
-- sa ville ;
-- son fournisseur d'accès / ISP.
-
-SSH Guardian peut ensuite :
-
-- compter les tentatives ;
-- bannir automatiquement une adresse IP ;
-- bloquer des pays ;
+- détecter les nouvelles connexions SSH ;
+- détecter les connexions interrompues ou échouées ;
+- compter les tentatives par IP ;
+- géolocaliser les adresses IP ;
+- bannir automatiquement une IP ;
+- bloquer un pays entier ;
 - envoyer des alertes Telegram ;
-- conserver l'historique dans SQLite ;
-- afficher les événements dans un dashboard Web ;
-- exposer une API HTTP ;
 - afficher les sessions SSH actives ;
-- terminer une session SSH ;
-- inspecter les sessions enregistrées/streamables.
+- terminer une session à distance ;
+- conserver l'historique dans SQLite ;
+- afficher les données dans un dashboard Web.
+
+Le projet est composé de plusieurs services indépendants plutôt que d'un gros script unique. Cette architecture est déjà au cœur de la version actuelle. :contentReference[oaicite:1]{index=1}
 
 ---
 
-## 🏗️ Architecture
+## ⚡ Installation rapide
 
-SSH Guardian n'est pas un script monolithique.
-
-Il est composé de plusieurs services indépendants communiquant principalement avec **Redis Streams**.
+Le parcours recommandé est simple :
 
 ```text
-                         SERVEUR SSH
-                              │
-                              ▼
-                        OpenSSH / journald
-                              │
-                              ▼
-                         ┌───────────┐
-                         │ Collector │
-                         └─────┬─────┘
-                               │
-                          ssh.events
-                               │
-                               ▼
-                            Redis
-                               │
-                               ▼
-                         ┌───────────┐
-                         │   GeoIP   │
-                         └─────┬─────┘
-                               │
-                     ssh.events.enriched
-                               │
-              ┌────────────────┼────────────────┐
-              │                │                │
-              ▼                ▼                ▼
-          Security          Storage         Telegram
-              │                │
-              ▼                ▼
-      security.actions       SQLite
-              │
-              ▼
-          Firewall
-
-
-          SQLite / Redis / Control
-                    │
-                    ▼
-                   API
-                    │
-                    ▼
-               Web Panel
+1. Créer le bot Telegram
+2. Récupérer TOKEN + CHAT_ID
+3. Cloner le projet
+4. Lancer install.sh
+5. Compléter .env
+6. Redémarrer les services
+7. Tester Telegram
+8. Ouvrir le dashboard
 ```
 
----
+### 1. Préparer Telegram
 
-## ✨ Fonctionnalités
+Avant d'installer SSH Guardian, crée ton bot.
 
-| Fonction | Description |
-|---|---|
-| 🔍 Surveillance | Analyse en temps réel des événements OpenSSH |
-| 🚨 Détection | Détection des connexions et authentifications suspectes |
-| 🔢 Compteur | Comptage des tentatives par adresse IP |
-| 🌍 GeoIP | Pays, ville, code ISO et fournisseur d'accès |
-| 🔥 Firewall | Bannissement et débannissement d'adresses IP |
-| 🌐 Blocage pays | Blocage automatique des connexions provenant d'un pays |
-| 🛡️ Whitelist | Protection des adresses IP administratives |
-| 📱 Telegram | Alertes et administration distante |
-| 💻 Sessions | Consultation des sessions SSH actives |
-| 📡 Stream | Consultation des sessions enregistrées |
-| ☠️ Kill session | Fermeture d'une session SSH |
-| 🗄️ SQLite | Historique persistant des événements |
-| ⚡ Redis | Bus d'événements entre les services |
-| 🔌 API | API HTTP FastAPI |
-| 🖥️ Panel | Dashboard Web de supervision |
-| ⚙️ systemd | Exécution des services en production |
-| 🧪 Tests | Tests automatisés avec pytest |
-
----
-
-# 🚀 Installation complète
-
-Cette section est conçue pour permettre une installation depuis zéro.
-
-Suivez simplement les étapes **dans l'ordre**.
-
----
-
-## 1. Préparer un serveur
-
-SSH Guardian est prévu principalement pour un serveur :
-
-- Debian ou Ubuntu ;
-- utilisant OpenSSH ;
-- utilisant systemd ;
-- disposant d'un accès Internet ;
-- administrable avec `sudo` ou `root`.
-
-L'installation nécessite des privilèges administrateur car SSH Guardian doit notamment configurer :
-
-- OpenSSH ;
-- systemd ;
-- Redis ;
-- le firewall ;
-- l'enregistrement des sessions SSH.
-
-> ⚠️ Ne fermez pas votre session SSH actuelle pendant l'installation.
-
-Conserver une session ouverte permet de récupérer plus facilement le serveur en cas de mauvaise configuration SSH ou firewall.
-
----
-
-# 📱 2. Créer le bot Telegram AVANT l'installation
-
-Il est recommandé de préparer Telegram avant de lancer `install.sh`.
-
-Vous aurez besoin de deux informations :
-
-```text
-SG_TELEGRAM_TOKEN
-SG_TELEGRAM_CHAT_ID
-```
-
----
-
-## 2.1 Créer le bot
-
-Dans Telegram, recherchez :
+Dans Telegram, ouvre :
 
 ```text
 @BotFather
 ```
 
-Ouvrez la conversation puis envoyez :
+Envoie :
 
 ```text
 /newbot
 ```
 
-BotFather demande ensuite un nom.
-
-Exemple :
+Choisis un nom, par exemple :
 
 ```text
 SSH Guardian
 ```
 
-Puis un nom d'utilisateur unique terminant généralement par `bot`.
-
-Exemple :
+Puis un username unique, par exemple :
 
 ```text
 my_ssh_guardian_bot
 ```
 
-BotFather fournit ensuite un token ressemblant à :
+BotFather te donnera un token :
 
 ```text
-1234567890:AA_EXAMPLE_TOKEN
+1234567890:AAxxxxxxxxxxxxxxxxxxxxxxxx
 ```
 
-Conservez-le.
-
-Ce token deviendra :
-
-```env
-SG_TELEGRAM_TOKEN=1234567890:AA_EXAMPLE_TOKEN
-```
-
-> 🔐 Le token Telegram est un secret. Ne le publiez jamais dans GitHub, un README, une capture d'écran ou un fichier public.
+🔐 **Garde ce token privé.**
 
 ---
 
-## 2.2 Envoyer `/start` au bot
+### 2. Récupérer ton Chat ID
 
-Ouvrez maintenant votre nouveau bot Telegram.
-
-Cliquez sur **Start** ou envoyez :
+Ouvre ton nouveau bot et envoie :
 
 ```text
 /start
 ```
 
-Cette étape est importante : Telegram doit avoir au moins un message permettant de retrouver votre Chat ID.
-
----
-
-## 2.3 Récupérer le Chat ID
-
-Depuis votre serveur, remplacez la valeur ci-dessous par le token obtenu auprès de BotFather :
+Sur ton serveur :
 
 ```bash
-TOKEN="VOTRE_TOKEN_TELEGRAM"
-```
+TOKEN="TON_TOKEN_TELEGRAM"
 
-Puis :
-
-```bash
 curl -s \
   "https://api.telegram.org/bot${TOKEN}/getUpdates" \
   | python3 -m json.tool
 ```
 
-Cherchez une section similaire à :
+Cherche :
 
 ```json
 "chat": {
-    "id": 123456789,
-    "first_name": "Jean",
-    "type": "private"
+    "id": 123456789
 }
 ```
 
-La valeur :
+Ton Chat ID est donc :
 
 ```text
 123456789
 ```
 
-est votre **Chat ID**.
-
-Elle deviendra :
-
-```env
-SG_TELEGRAM_CHAT_ID=123456789
-```
-
-Si `jq` est déjà installé, vous pouvez également utiliser :
+Avec `jq` :
 
 ```bash
 curl -s \
@@ -290,261 +133,126 @@ curl -s \
   | jq '.result[-1].message.chat.id'
 ```
 
-Vous disposez maintenant des deux informations nécessaires :
+Tu dois maintenant avoir :
 
 ```text
-Token Telegram
-Chat ID Telegram
+TOKEN Telegram
+CHAT ID Telegram
 ```
 
 ---
 
-## 2.4 Vérifier le token Telegram
-
-Avant d'aller plus loin :
+### 3. Cloner le projet
 
 ```bash
-curl -s \
-  "https://api.telegram.org/bot${TOKEN}/getMe" \
-  | python3 -m json.tool
-```
-
-Un token valide doit retourner notamment :
-
-```json
-{
-    "ok": true
-}
-```
-
----
-
-# 📦 3. Télécharger SSH Guardian
-
-Clonez le dépôt GitHub :
-
-```bash
-git clone <URL_DU_DEPOT_GITHUB>
-```
-
-Entrez ensuite dans le projet :
-
-```bash
+git clone <URL_DU_DEPOT>
 cd SSH-GUARDIAN-
 ```
 
-À partir de maintenant, toutes les commandes du README supposent que vous êtes dans :
-
-```text
-SSH-GUARDIAN-
-```
-
 ---
 
-# ⚙️ 4. Lancer l'installation
-
-Rendez les scripts exécutables :
+### 4. Lancer l'installation
 
 ```bash
-chmod +x install.sh uninstall.sh
-```
-
-Lancez ensuite :
-
-```bash
+chmod +x install.sh
 sudo ./install.sh
 ```
 
-L'installateur prépare automatiquement l'environnement nécessaire au projet.
+L'installateur prépare automatiquement l'environnement :
 
-Il s'occupe notamment de :
+```text
+✓ Python
+✓ dépendances
+✓ Redis
+✓ SQLite
+✓ dossiers runtime
+✓ configuration OpenSSH
+✓ SSH recorder
+✓ services systemd
+✓ fichier .env
+✓ token du Panel
+```
 
-- vérifier le système ;
-- installer/préparer les dépendances ;
-- préparer Python ;
-- vérifier les imports ;
-- préparer Redis ;
-- créer les répertoires nécessaires ;
-- générer le fichier `.env` ;
-- générer le token du Panel ;
-- installer le système d'enregistrement SSH ;
-- configurer OpenSSH ;
-- vérifier la configuration avec `sshd -t` ;
-- détecter le service OpenSSH ;
-- installer les services systemd SSH Guardian ;
-- préparer l'environnement d'exécution.
+Le fichier `.env` est généré automatiquement par `install.sh`.
+
+Tu n'as donc **pas besoin de créer `.env` manuellement**.
 
 ---
 
-# 🔧 5. Compléter le fichier `.env`
+### 5. Compléter `.env`
 
-**Il n'est pas nécessaire de créer `.env` manuellement.**
-
-Le fichier :
-
-```text
-.env
-```
-
-est généré par :
-
-```text
-install.sh
-```
-
-Après l'installation, ouvrez simplement le fichier généré :
+Après l'installation :
 
 ```bash
 nano .env
 ```
 
-Vous devez principalement compléter les informations qui dépendent de votre installation.
-
----
-
-## Telegram
-
-Renseignez les informations préparées avant l'installation :
+Les valeurs importantes à vérifier sont principalement celles-ci :
 
 ```env
 SG_TELEGRAM_ENABLED=true
-SG_TELEGRAM_TOKEN=VOTRE_TOKEN_TELEGRAM
-SG_TELEGRAM_CHAT_ID=VOTRE_CHAT_ID
-```
+SG_TELEGRAM_TOKEN=TON_TOKEN
+SG_TELEGRAM_CHAT_ID=TON_CHAT_ID
 
-Exemple :
-
-```env
-SG_TELEGRAM_ENABLED=true
-SG_TELEGRAM_TOKEN=1234567890:AA_EXAMPLE_TOKEN
-SG_TELEGRAM_CHAT_ID=123456789
-```
-
-N'utilisez évidemment pas ces valeurs d'exemple.
-
----
-
-## Whitelist
-
-La whitelist empêche SSH Guardian de bannir certaines adresses de confiance.
-
-Exemple :
-
-```env
-SG_WHITELIST=127.0.0.1,::1
-```
-
-Pour ajouter votre IP publique :
-
-```env
-SG_WHITELIST=127.0.0.1,::1,VOTRE_IP
-```
-
-Plusieurs adresses sont séparées par des virgules.
-
-> ⚠️ Vérifiez soigneusement la whitelist avant d'activer réellement le firewall.
-
----
-
-## Nombre de tentatives
-
-Exemple :
-
-```env
 SG_MAX_ATTEMPTS=3
+SG_BAN_DURATION_SECONDS=86400
+
+SG_WHITELIST=127.0.0.1,::1,TON_IP
+
+SG_FIREWALL_ENABLED=false
 ```
 
-Avec cette configuration :
-
-```text
-Tentative 1/3 → surveillance
-Tentative 2/3 → surveillance
-Tentative 3/3 → bannissement
-```
-
----
-
-## Durée du bannissement
-
-Exemple :
+#### Telegram
 
 ```env
-SG_BAN_DURATION_SECONDS=86400
+SG_TELEGRAM_ENABLED=true
+SG_TELEGRAM_TOKEN=TON_TOKEN
+SG_TELEGRAM_CHAT_ID=TON_CHAT_ID
 ```
 
-Valeurs utiles :
+#### Whitelist
 
-| Durée | Secondes |
-|---|---:|
-| 1 heure | `3600` |
-| 6 heures | `21600` |
-| 12 heures | `43200` |
-| 24 heures | `86400` |
-| 7 jours | `604800` |
+Ajoute l'IP depuis laquelle tu administres le serveur :
 
----
+```env
+SG_WHITELIST=127.0.0.1,::1,TON_IP
+```
 
-## Firewall
+⚠️ Fais cette étape **avant d'activer le firewall réel**.
 
-Pendant les premiers tests, utilisez :
+#### Firewall
+
+Pour les premiers tests :
 
 ```env
 SG_FIREWALL_ENABLED=false
 ```
 
-Le système détectera les événements sans appliquer réellement les bannissements.
-
-Lorsque vous êtes certain que :
-
-- votre IP est dans la whitelist ;
-- Telegram fonctionne ;
-- la détection fonctionne ;
-- les événements sont correctement remontés ;
-
-vous pouvez activer :
+Lorsque tout est validé :
 
 ```env
 SG_FIREWALL_ENABLED=true
 ```
 
-> ⚠️ Une mauvaise whitelist combinée à un firewall actif peut bloquer votre propre accès SSH.
-
----
-
-# 🔐 6. Token du Panel
-
-Le dashboard Web est protégé par :
+#### Nombre de tentatives
 
 ```env
-SG_PANEL_TOKEN=
+SG_MAX_ATTEMPTS=3
 ```
 
-Le token est généré automatiquement par `install.sh`.
+Ce qui donne :
 
-Vous n'avez normalement rien à créer manuellement.
-
-Pour afficher le token généré :
-
-```bash
-grep '^SG_PANEL_TOKEN=' .env
+```text
+1/3 → surveillance
+2/3 → surveillance
+3/3 → bannissement
 ```
-
-Pour afficher uniquement sa valeur :
-
-```bash
-grep '^SG_PANEL_TOKEN=' .env \
-  | cut -d= -f2-
-```
-
-Conservez ce token privé.
-
-Il permet d'accéder aux fonctions administratives du Panel.
 
 ---
 
-# 🔄 7. Appliquer la configuration
+### 6. Redémarrer SSH Guardian
 
-Après avoir complété `.env`, redémarrez les services SSH Guardian :
+Après modification du `.env` :
 
 ```bash
 sudo systemctl restart \
@@ -561,9 +269,28 @@ sudo systemctl restart \
 
 ---
 
-# ✅ 8. Vérifier que SSH Guardian fonctionne
+### 7. Vérifier l'installation
 
-Vérifiez tous les services :
+Redis :
+
+```bash
+redis-cli ping
+```
+
+Résultat attendu :
+
+```text
+PONG
+```
+
+API :
+
+```bash
+curl -s http://127.0.0.1:8080/health \
+  | python3 -m json.tool
+```
+
+Services :
 
 ```bash
 systemctl --no-pager --full status \
@@ -578,188 +305,130 @@ systemctl --no-pager --full status \
   ssh-guardian@panel
 ```
 
-Chaque service doit normalement apparaître :
-
-```text
-active (running)
-```
-
 ---
 
-## Vérifier Redis
+## 📱 Utiliser le bot Telegram
 
-```bash
-redis-cli ping
-```
-
-Résultat attendu :
-
-```text
-PONG
-```
-
----
-
-## Vérifier l'API
-
-```bash
-curl -s http://127.0.0.1:8080/health \
-  | python3 -m json.tool
-```
-
----
-
-## Vérifier les ports
-
-```bash
-ss -lntp | grep -E ':3000|:8080'
-```
-
-Vous devez normalement retrouver :
-
-```text
-127.0.0.1:8080
-```
-
-pour l'API et le port `3000` utilisé par le Panel selon sa configuration.
-
----
-
-# 📱 9. Tester Telegram
-
-Envoyez au bot :
+Une fois installé, commence simplement par :
 
 ```text
 /stats
 ```
 
-Vous pouvez ensuite tester :
+Puis :
 
 ```text
 /top
 ```
 
-puis :
+Si le bot répond, la communication Telegram fonctionne.
+
+### Commandes principales
+
+| Commande | Action |
+|---|---|
+| `/stats` | Statistiques générales |
+| `/top` | IP les plus actives |
+| `/topcountries` | Pays les plus actifs |
+| `/search <IP>` | Rechercher une IP |
+| `/bans` | Voir les bans |
+| `/unban <IP>` | Débannir une IP |
+| `/countries` | Voir les pays bloqués |
+| `/block <CC>` | Bloquer un pays |
+| `/unblock <CC>` | Débloquer un pays |
+| `/sessions` | Voir les sessions SSH |
+| `/active` | Voir les sessions actives |
+| `/stream <ID>` | Suivre une session |
+| `/killsession <PID>` | Terminer une session |
+| `/killallsessions` | Terminer les sessions distantes |
+
+Ces commandes correspondent aux fonctionnalités déjà exposées par l'interface Telegram actuelle. :contentReference[oaicite:2]{index=2}
+
+---
+
+### 📊 Statistiques
+
+```text
+/stats
+```
+
+Exemple :
+
+```text
+📊 Statistiques SSH Guardian
+
+Connexions : 142
+Échecs : 37
+Succès : 8
+IP uniques : 29
+Bans : 11
+```
+
+---
+
+### 🏆 Top IP
+
+```text
+/top
+```
+
+Exemple :
+
+```text
+🏆 Top IP attaquantes
+
+1. 45.128.39.115 — 6
+2. 82.80.219.126 — 4
+3. 95.174.64.122 — 3
+```
+
+---
+
+### 🌍 Top pays
 
 ```text
 /topcountries
 ```
 
-et :
+Exemple :
 
 ```text
-/countries
-```
+🌍 Top pays attaquants
 
-Si le bot répond, la communication Telegram fonctionne.
-
----
-
-# 🖥️ 10. Accéder au Panel Web
-
-Le Panel utilise par défaut le port :
-
-```text
-3000
-```
-
-Pour éviter d'exposer inutilement l'interface d'administration sur Internet, il est recommandé de l'utiliser via un **tunnel SSH**.
-
-Depuis votre ordinateur :
-
-```bash
-ssh -i CHEMIN_VERS_VOTRE_CLE \
-  -N \
-  -L 3000:127.0.0.1:3000 \
-  UTILISATEUR@VOTRE_SERVEUR
-```
-
-Sous Windows PowerShell, le principe est identique :
-
-```powershell
-ssh -i "CHEMIN_VERS_VOTRE_CLE.pem" -N -L 3000:127.0.0.1:3000 UTILISATEUR@VOTRE_SERVEUR
-```
-
-Gardez cette fenêtre ouverte.
-
-Ouvrez ensuite votre navigateur sur :
-
-```text
-http://127.0.0.1:3000
-```
-
-Lorsque le Panel demande son token, récupérez-le avec :
-
-```bash
-grep '^SG_PANEL_TOKEN=' .env \
-  | cut -d= -f2-
+1. Spain — 8
+2. Israel — 4
+3. Italy — 3
 ```
 
 ---
 
-# 🎉 Installation terminée
-
-À ce stade, vous devez avoir :
+### 🔎 Rechercher une IP
 
 ```text
-✅ OpenSSH surveillé
-✅ Redis opérationnel
-✅ Collector actif
-✅ Enrichissement GeoIP actif
-✅ Security Engine actif
-✅ Firewall prêt
-✅ SQLite actif
-✅ Control actif
-✅ Telegram actif
-✅ API active
-✅ Panel actif
-✅ Token Panel configuré
+/search 203.0.113.10
 ```
 
-Vous pouvez maintenant utiliser SSH Guardian.
+Permet de retrouver les informations connues et les événements associés à cette adresse.
 
 ---
 
-# 📱 Commandes Telegram
+### 🚫 Gérer les bans
 
-## Informations
+Afficher les bans :
 
-| Commande | Fonction |
-|---|---|
-| `/stats` | Statistiques globales |
-| `/top` | IP les plus actives |
-| `/topcountries` | Pays générant le plus d'activité suspecte |
-| `/search <IP>` | Historique d'une adresse IP |
-| `/bans` | Bans actifs |
-| `/countries` | Pays actuellement bloqués |
+```text
+/bans
+```
 
----
-
-## Firewall
-
-Débannir une adresse :
+Débannir une IP :
 
 ```text
 /unban 203.0.113.10
 ```
 
-Bloquer un pays :
+---
 
-```text
-/block fr
-```
-
-Débloquer un pays :
-
-```text
-/unblock fr
-```
-
-Afficher les pays bloqués :
-
-```text
-/countries
-```
+### 🌐 Bloquer un pays
 
 Les pays utilisent leur code ISO.
 
@@ -774,9 +443,27 @@ GB → Royaume-Uni
 US → États-Unis
 ```
 
+Bloquer :
+
+```text
+/block fr
+```
+
+Débloquer :
+
+```text
+/unblock fr
+```
+
+Afficher la liste :
+
+```text
+/countries
+```
+
 ---
 
-## Sessions SSH
+### 💻 Sessions SSH
 
 Afficher les sessions :
 
@@ -790,7 +477,7 @@ ou :
 /active
 ```
 
-Exemple de résultat :
+Exemple :
 
 ```text
 Sessions SSH actives
@@ -802,7 +489,7 @@ TTY : pts/0
 LIVE / streamable
 ```
 
-Consulter une session :
+Suivre une session :
 
 ```text
 /stream 151658
@@ -814,110 +501,168 @@ Terminer cette session :
 /killsession 151658
 ```
 
-Terminer les sessions distantes gérées :
-
-```text
-/killallsessions
-```
-
-> ⚠️ Vérifiez toujours le PID et la session avant d'utiliser une commande de terminaison.
+⚠️ Vérifie toujours le PID avant de terminer une session.
 
 ---
 
-# 🚨 Exemple de détection
+## 🖥️ Dashboard Web
 
-Une activité SSH suspecte peut produire une notification similaire à :
-
-```text
-🚨 Tentative SSH échouée
-
-IP : 201.214.43.22
-Localisation : Quillota, Chile
-FAI : VTR BANDA ANCHA S.A.
-
-Raison : connexion fermée avant authentification
-
-Tentatives : 1/3
-Avant bannissement : 2
-```
-
-Puis :
+Le Panel permet de consulter depuis une interface Web :
 
 ```text
-Tentatives : 2/3
-Avant bannissement : 1
+✓ état des services
+✓ connexions
+✓ échecs
+✓ succès
+✓ IP uniques
+✓ bans
+✓ Top IP
+✓ Top pays
+✓ pays bloqués
+✓ événements récents
+✓ sessions SSH
 ```
 
-Lorsque le seuil configuré est atteint, le Security Engine peut générer une action de bannissement transmise au Firewall.
+Le dashboard fait partie des fonctionnalités déjà présentes dans le projet actuel. :contentReference[oaicite:3]{index=3}
+
+### Token du Panel
+
+Le token est généré automatiquement pendant l'installation.
+
+Pour l'afficher :
+
+```bash
+grep '^SG_PANEL_TOKEN=' .env \
+  | cut -d= -f2-
+```
+
+🔐 Garde ce token privé.
 
 ---
 
-# 🌍 Blocage par pays
+### Accès sécurisé au Panel
 
-SSH Guardian peut interdire automatiquement les nouvelles connexions provenant d'un pays.
+Il est recommandé de passer par un tunnel SSH plutôt que d'exposer directement le Panel sur Internet.
 
-Depuis Telegram :
+Depuis ton ordinateur :
 
-```text
-/block fr
+```bash
+ssh -i "CHEMIN_VERS_TA_CLE.pem" \
+  -N \
+  -L 3000:127.0.0.1:3000 \
+  UTILISATEUR@SERVEUR
 ```
 
-Pour débloquer :
+Sous PowerShell :
 
-```text
-/unblock fr
+```powershell
+ssh -i "CHEMIN_VERS_TA_CLE.pem" -N -L 3000:127.0.0.1:3000 UTILISATEUR@SERVEUR
 ```
 
-Pour afficher la configuration :
+Puis ouvre :
 
 ```text
-/countries
+http://127.0.0.1:3000
 ```
-
-Les mêmes opérations peuvent être réalisées depuis le Panel Web.
 
 ---
 
-# 🔎 Recherche d'une IP
+## 🧠 Comment ça fonctionne ?
 
-Depuis Telegram :
+Quand quelqu'un contacte SSH :
 
 ```text
-/search 203.0.113.10
+Connexion SSH
+     │
+     ▼
+ Collector
+     │
+     ▼
+   Redis
+     │
+     ▼
+   GeoIP
+     │
+     ▼
+ Security
+     │
+     ├── IP whitelistée ──────► ignorée
+     │
+     ├── tentative normale ───► surveillée
+     │
+     ├── seuil atteint ───────► ban
+     │
+     └── pays bloqué ─────────► ban
+                                  │
+                                  ▼
+                              Firewall
 ```
 
-Le système peut utiliser l'historique enregistré afin d'afficher les informations connues sur cette adresse.
+En parallèle :
+
+```text
+événements
+   │
+   ├──► SQLite
+   ├──► Telegram
+   ├──► API
+   └──► Dashboard
+```
 
 ---
 
-# 🖥️ Dashboard
+## 🧩 Services
 
-Le dashboard constitue l'interface SOC de SSH Guardian.
+SSH Guardian est composé de plusieurs services :
 
-Il permet notamment de consulter :
-
-- l'état des services ;
-- le nombre de connexions ;
-- les échecs ;
-- les succès ;
-- les IP uniques ;
-- les bans ;
-- les événements récents ;
-- les IP les plus actives ;
-- les pays les plus actifs ;
-- les pays bloqués ;
-- les sessions SSH ;
-- les opérations administratives.
+| Service | Rôle |
+|---|---|
+| `collector` | Lit les événements OpenSSH |
+| `geoip` | Géolocalise les IP |
+| `security` | Décide quoi surveiller ou bloquer |
+| `firewall` | Applique les bans |
+| `storage` | Enregistre l'historique |
+| `control` | Exécute les commandes |
+| `telegram` | Bot + notifications |
+| `api` | API HTTP |
+| `panel` | Interface Web |
 
 ---
 
-# 🔌 API HTTP
-
-L'API fonctionne par défaut sur :
+## 📂 Structure du projet
 
 ```text
-127.0.0.1:8080
+SSH-GUARDIAN-/
+│
+├── services/
+│   ├── collector/
+│   ├── geoip/
+│   ├── security/
+│   ├── firewall/
+│   ├── storage/
+│   ├── control/
+│   ├── telegram/
+│   ├── api/
+│   └── panel/
+│
+├── shared/
+├── scripts/
+├── tests/
+├── data/
+├── logs/
+├── run/
+│
+├── install.sh
+├── uninstall.sh
+├── requirements.txt
+└── README.md
 ```
+
+---
+
+## 🔌 API
+
+L'API écoute par défaut en local.
 
 Health check :
 
@@ -942,21 +687,23 @@ curl -s http://127.0.0.1:8080/topcountries \
 
 ---
 
-# 🗄️ Base SQLite
+## 🗄️ Données
 
-L'historique est enregistré dans :
+### SQLite
+
+Base principale :
 
 ```text
 data/guardian.db
 ```
 
-Ouvrir la base :
+Ouvrir :
 
 ```bash
 sqlite3 data/guardian.db
 ```
 
-Afficher les derniers événements :
+Derniers événements :
 
 ```sql
 SELECT
@@ -970,33 +717,15 @@ ORDER BY id DESC
 LIMIT 20;
 ```
 
-Rechercher une IP :
+### Redis
 
-```sql
-SELECT
-    event_type,
-    ip,
-    country,
-    city,
-    timestamp
-FROM enriched_events
-WHERE ip = '203.0.113.10'
-ORDER BY id DESC;
+Tester :
+
+```bash
+redis-cli ping
 ```
 
-Quitter SQLite :
-
-```text
-.quit
-```
-
----
-
-# ⚡ Redis Streams
-
-Redis constitue le bus d'événements interne.
-
-Principaux streams :
+Streams principaux :
 
 ```text
 ssh.events
@@ -1006,94 +735,15 @@ firewall.events
 control.commands
 ```
 
-Vérifier Redis :
+Voir les derniers événements :
 
 ```bash
-redis-cli ping
-```
-
-Compter les événements :
-
-```bash
-redis-cli XLEN ssh.events
-redis-cli XLEN ssh.events.enriched
-redis-cli XLEN security.actions
-redis-cli XLEN firewall.events
-```
-
-Afficher les derniers événements :
-
-```bash
-redis-cli XREVRANGE ssh.events + - COUNT 10
+redis-cli XREVRANGE security.actions + - COUNT 10
 ```
 
 ---
 
-# ⚙️ Gestion des services
-
-Exemple avec Security :
-
-```bash
-systemctl status ssh-guardian@security
-```
-
-Redémarrer :
-
-```bash
-sudo systemctl restart ssh-guardian@security
-```
-
-Arrêter :
-
-```bash
-sudo systemctl stop ssh-guardian@security
-```
-
-Démarrer :
-
-```bash
-sudo systemctl start ssh-guardian@security
-```
-
-Logs en direct :
-
-```bash
-journalctl -u ssh-guardian@security -f
-```
-
----
-
-## Tous les services
-
-SSH Guardian utilise notamment :
-
-```text
-ssh-guardian@collector
-ssh-guardian@geoip
-ssh-guardian@security
-ssh-guardian@firewall
-ssh-guardian@storage
-ssh-guardian@control
-ssh-guardian@telegram
-ssh-guardian@api
-ssh-guardian@panel
-```
-
----
-
-# 📋 Logs
-
-Collector :
-
-```bash
-journalctl -u ssh-guardian@collector -f
-```
-
-GeoIP :
-
-```bash
-journalctl -u ssh-guardian@geoip -f
-```
+## 📋 Logs
 
 Security :
 
@@ -1105,18 +755,6 @@ Firewall :
 
 ```bash
 journalctl -u ssh-guardian@firewall -f
-```
-
-Storage :
-
-```bash
-journalctl -u ssh-guardian@storage -f
-```
-
-Control :
-
-```bash
-journalctl -u ssh-guardian@control -f
 ```
 
 Telegram :
@@ -1137,108 +775,94 @@ Panel :
 journalctl -u ssh-guardian@panel -f
 ```
 
----
-
-# 🔍 Logs OpenSSH
-
-Selon le système, le service peut s'appeler `ssh` ou `sshd`.
-
-Debian/Ubuntu utilise généralement :
+Logs OpenSSH :
 
 ```bash
 journalctl -u ssh -f
 ```
 
-Sur un système utilisant `sshd.service` :
+Si le service s'appelle `sshd` :
 
 ```bash
 journalctl -u sshd -f
 ```
 
-Pour vérifier :
-
-```bash
-systemctl status ssh --no-pager 2>/dev/null || \
-systemctl status sshd --no-pager
-```
-
 ---
 
-# 🧪 Tests
+## 🧪 Tests
 
-Lancez les tests depuis la racine du projet :
+Depuis la racine du projet :
 
 ```bash
 PYTHONPATH=. python3 -m pytest -q
 ```
 
+Mode détaillé :
+
+```bash
+PYTHONPATH=. python3 -m pytest -v
+```
+
 La suite couvre notamment :
 
-- le parsing des logs OpenSSH ;
-- les événements de connexion ;
-- les authentifications échouées ;
-- les utilisateurs invalides ;
-- GeoIP ;
-- le Security Engine ;
-- les compteurs ;
-- le bannissement ;
-- la whitelist ;
-- le firewall ;
-- SQLite.
+```text
+✓ parser SSH
+✓ database
+✓ firewall
+✓ GeoIP
+✓ Security Engine
+✓ compteurs
+✓ bannissement
+✓ whitelist
+```
+
+La documentation détaillée des tests peut être placée dans :
+
+```text
+tests/README.md
+```
 
 ---
 
-# 🧑‍💻 Mode développement
+## 🛠️ Développement
 
-Pour lancer la stack en mode développement :
+Démarrer :
 
 ```bash
 ./scripts/start-dev.sh
 ```
 
-Pour l'arrêter :
+Arrêter :
 
 ```bash
 ./scripts/stop-dev.sh
 ```
 
-Afficher les logs :
+Voir les logs :
 
 ```bash
 ./scripts/logs.sh
 ```
 
-> ⚠️ N'exécutez pas simultanément une instance DEV et la même instance gérée par systemd.
+> ⚠️ Ne lance pas simultanément le mode DEV et les mêmes services via systemd.
 
 ---
 
-# ⚠️ Telegram : erreur 409 Conflict
+## 🩺 Dépannage rapide
 
-Si vous voyez :
+### Telegram affiche `409 Conflict`
 
-```text
-409 Conflict
-```
-
-sur `getUpdates`, plusieurs processus utilisent probablement le même bot Telegram simultanément.
-
-Vérifiez :
+Vérifie qu'un seul bot tourne :
 
 ```bash
 ps -ef | grep '[s]ervices.telegram.app.main'
 ```
 
-En production, une seule instance Telegram doit être active.
-
-Vous pouvez également vérifier systemd :
-
-```bash
-systemctl status ssh-guardian@telegram
-```
+Il ne doit normalement y avoir qu'une seule instance Telegram.
 
 ---
 
-# ⚠️ Port API déjà utilisé
+### API indisponible
 
 ```bash
 ss -lntp | grep ':8080'
@@ -1247,20 +871,12 @@ ss -lntp | grep ':8080'
 Puis :
 
 ```bash
-ps -ef | grep '[s]ervices.api.app.main'
-```
-
-Évitez d'exécuter simultanément :
-
-```text
-API DEV
-+
-API systemd
+systemctl status ssh-guardian@api
 ```
 
 ---
 
-# ⚠️ Port Panel déjà utilisé
+### Panel indisponible
 
 ```bash
 ss -lntp | grep ':3000'
@@ -1269,36 +885,12 @@ ss -lntp | grep ':3000'
 Puis :
 
 ```bash
-ps -ef | grep '[s]ervices.panel.app.main'
+systemctl status ssh-guardian@panel
 ```
 
 ---
 
-# ⚠️ Telegram ne répond pas
-
-Vérifiez le service :
-
-```bash
-systemctl status ssh-guardian@telegram
-```
-
-Puis :
-
-```bash
-journalctl -u ssh-guardian@telegram -n 100 --no-pager
-```
-
-Vérifiez également votre `.env` :
-
-```bash
-grep '^SG_TELEGRAM_' .env
-```
-
-Ne publiez pas la sortie si elle contient votre véritable token.
-
----
-
-# ⚠️ Redis ne répond pas
+### Redis indisponible
 
 ```bash
 redis-cli ping
@@ -1310,201 +902,64 @@ Résultat attendu :
 PONG
 ```
 
-Vérifiez le service :
-
-```bash
-systemctl status redis-server --no-pager
-```
-
 ---
 
-# 🔬 Diagnostic complet
-
-Afficher les processus SSH Guardian :
+### Voir tous les processus
 
 ```bash
 ps -ef | grep '[s]ervices\..*\.app\.main'
 ```
 
-Afficher les ports :
-
-```bash
-ss -lntp | grep -E ':3000|:8080'
-```
-
-Afficher les dernières actions Security :
-
-```bash
-redis-cli XREVRANGE security.actions + - COUNT 10
-```
-
-Afficher les événements Firewall :
-
-```bash
-redis-cli XREVRANGE firewall.events + - COUNT 10
-```
-
-Afficher les commandes Control :
-
-```bash
-redis-cli XREVRANGE control.commands + - COUNT 10
-```
-
 ---
 
-# 🔒 Recommandations de sécurité
+## 🔐 Bonnes pratiques
 
-Avant d'activer SSH Guardian en production :
+Avant d'activer le firewall réel :
 
-1. gardez une session SSH ouverte pendant la configuration ;
-2. ajoutez votre IP administrative à `SG_WHITELIST` ;
-3. commencez avec `SG_FIREWALL_ENABLED=false` ;
-4. vérifiez les événements SSH ;
-5. vérifiez GeoIP ;
-6. vérifiez les compteurs de tentatives ;
-7. testez Telegram ;
-8. testez le Panel ;
-9. testez les opérations de déblocage ;
-10. vérifiez que l'API reste privée ;
-11. protégez le token du Panel ;
-12. protégez le token Telegram ;
-13. ne lancez pas plusieurs instances du même service ;
-14. activez ensuite le firewall réel.
+```text
+✓ garder une session SSH ouverte
+✓ mettre son IP en whitelist
+✓ tester Telegram
+✓ tester le Panel
+✓ vérifier les événements GeoIP
+✓ tester /unban
+✓ tester /block et /unblock
+✓ vérifier qu'il n'existe pas de doubles processus
+```
 
----
+Puis seulement :
 
-# 🔐 Secrets et Git
+```env
+SG_FIREWALL_ENABLED=true
+```
 
-Ne publiez jamais :
+Ne commit jamais :
 
 ```text
 .env
+tokens Telegram
+token Panel
 clés SSH privées
-token Telegram
-token du Panel
-bases contenant des données opérationnelles
-logs de production
-```
-
-Le fichier :
-
-```text
-.env.example
-```
-
-peut rester dans Git.
-
-Il sert uniquement de documentation des variables disponibles.
-
-Le véritable :
-
-```text
-.env
-```
-
-est généré par l'installation et contient les secrets de la machine.
-
----
-
-# 🗂️ Structure du projet
-
-```text
-SSH-GUARDIAN-/
-│
-├── services/
-│   ├── collector/       Collecte OpenSSH / journald
-│   ├── geoip/           Enrichissement GeoIP
-│   ├── security/        Moteur de sécurité
-│   ├── firewall/        Application des bannissements
-│   ├── storage/         Persistance des événements
-│   ├── control/         Commandes administratives
-│   ├── telegram/        Bot Telegram
-│   ├── api/             API FastAPI
-│   └── panel/           Dashboard Web
-│
-├── shared/
-│   ├── bus/             Communication Redis
-│   ├── config/          Configuration partagée
-│   └── events/          Modèles d'événements
-│
-├── scripts/             Scripts d'administration/dev
-├── tests/               Tests automatisés
-├── data/                Données persistantes
-├── logs/                Logs du mode développement
-├── run/                 PID du mode développement
-│
-├── install.sh           Installation automatique
-├── uninstall.sh         Désinstallation
-├── .env.example         Exemple de configuration
-├── requirements.txt     Dépendances Python
-└── README.md
+logs sensibles
 ```
 
 ---
 
-# 🗑️ Désinstallation
-
-Pour désinstaller SSH Guardian :
+## 🗑️ Désinstallation
 
 ```bash
 chmod +x uninstall.sh
 sudo ./uninstall.sh
 ```
 
-> ⚠️ Vérifiez le contenu du script de désinstallation avant son exécution si vous souhaitez conserver des données, des enregistrements de sessions ou certaines règles firewall.
-
----
-
-# 🧠 Stack technique
-
-<div align="center">
-
-| Composant | Technologie |
-|---|---|
-| Runtime | Python |
-| Serveur SSH | OpenSSH |
-| Logs système | journald |
-| Bus d'événements | Redis Streams |
-| Base de données | SQLite |
-| API | FastAPI |
-| Dashboard | HTML / CSS / JavaScript |
-| Notifications | Telegram Bot API |
-| Firewall | Linux / iptables |
-| Services | systemd |
-| Tests | pytest |
-
-</div>
-
----
-
-# 🛡️ Philosophie du projet
-
-SSH Guardian repose sur quatre principes.
-
-**Observable**  
-L'activité SSH doit être visible, enregistrée et exploitable.
-
-**Modulaire**  
-La collecte, l'enrichissement, la détection, le firewall et les interfaces sont séparés.
-
-**Défensif**  
-Les décisions de blocage proviennent du Security Engine et les adresses administratives peuvent être protégées par whitelist.
-
-**Privé par défaut**  
-Les interfaces administratives doivent rester aussi peu exposées que possible.
-
 ---
 
 <div align="center">
 
-## 🛡️ SSH Guardian V2
+### 🛡️ SSH Guardian V2
 
-**De simples logs OpenSSH à une supervision de sécurité complète.**
+**Un mini SOC dédié à la surveillance et à la protection de ton serveur SSH.**
 
-`COLLECT` · `ENRICH` · `DETECT` · `BLOCK` · `NOTIFY` · `INVESTIGATE`
-
-<br>
-
-**Conçu pour les serveurs Linux utilisant OpenSSH.**
+`COLLECT` · `ENRICH` · `DETECT` · `BLOCK` · `NOTIFY`
 
 </div>
