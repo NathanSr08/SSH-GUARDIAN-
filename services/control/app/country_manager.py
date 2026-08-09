@@ -40,6 +40,18 @@ class CountryManager:
                 f"<pre>{result.stderr}</pre>"
             )
 
+        self.bus.publish(
+            Settings.FIREWALL_EVENTS_STREAM,
+            {
+                "event_type": "security.country.blocked",
+                "timestamp": datetime.now(
+                    timezone.utc
+                ).isoformat(),
+                "country_code": code.upper(),
+                "reason": "manual_country_block",
+            },
+        )
+
         return (
             f"🛡 Pays <b>{code.upper()}</b> bloqué.\n\n"
             "Toute nouvelle connexion détectée depuis "
@@ -270,6 +282,19 @@ class CountryManager:
                     ),
                 ]
             )
+
+        self.bus.publish(
+            Settings.FIREWALL_EVENTS_STREAM,
+            {
+                "event_type": "security.country.unblocked",
+                "timestamp": datetime.now(
+                    timezone.utc
+                ).isoformat(),
+                "country_code": code.upper(),
+                "reason": "manual_country_unblock",
+                "unbanned_count": len(unbanned),
+            },
+        )
 
         return "\n".join(lines)
 

@@ -211,6 +211,37 @@ def format_firewall_event(
         "event_type"
     )
 
+    if event_type == "security.country.blocked":
+        country_code = client.escape(
+            event.get("country_code")
+            or "??"
+        )
+
+        return (
+            "🌍 <b>Pays bloqué</b>\n\n"
+            f"🛡 Pays : <b>{country_code}</b>\n"
+            "📡 Source : Control / Panel\n\n"
+            "Toute nouvelle connexion détectée "
+            "depuis ce pays sera automatiquement bloquée."
+        )
+
+    if event_type == "security.country.unblocked":
+        country_code = client.escape(
+            event.get("country_code")
+            or "??"
+        )
+
+        count = event.get(
+            "unbanned_count",
+            0,
+        )
+
+        return (
+            "🔓 <b>Pays débloqué</b>\n\n"
+            f"🌍 Pays : <b>{country_code}</b>\n"
+            f"✅ IP débannies : <b>{count}</b>"
+        )
+
     if event_type == "firewall.ip.unbanned":
         ip = client.escape(
             event.get("ip")
