@@ -18,10 +18,6 @@ from services.telegram.app.messages import (
     format_ssh_event,
 )
 
-from services.telegram.app.mfa_dedupe import (
-    should_suppress_ssh_event,
-)
-
 
 def mfa_notifications(
     bus,
@@ -169,27 +165,6 @@ def notifications(
 
         for message_id, payload in messages:
             try:
-                if should_suppress_ssh_event(
-                    bus.client,
-                    payload,
-                ):
-                    print(
-                        "[TELEGRAM MFA] "
-                        "notification SSH déjà couverte "
-                        "par la décision MFA "
-                        f"type={payload.get('event_type')} "
-                        f"user={payload.get('username')} "
-                        f"ip={payload.get('ip')}"
-                    )
-
-                    bus.ack(
-                        Settings.SSH_ENRICHED_STREAM,
-                        "telegram-ssh",
-                        message_id,
-                    )
-
-                    continue
-
                 message = format_ssh_event(
                     telegram,
                     payload,

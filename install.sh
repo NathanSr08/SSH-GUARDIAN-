@@ -918,25 +918,96 @@ fi
 # RELOAD SSH
 # ------------------------------------------------------------
 
-if systemctl list-unit-files |
-    grep -q '^ssh.service'
-then
+info "Détection du service OpenSSH..."
 
-    systemctl reload ssh
+SSH_SERVICE=""
 
-elif systemctl list-unit-files |
-    grep -q '^sshd.service'
-then
+#
+# Debian / Ubuntu utilisent généralement ssh.service.
+# Certains systèmes exposent sshd.service directement ou
+# comme alias.
+#
+if systemctl cat ssh.service >/dev/null 2>&1; then
 
-    systemctl reload sshd
+    SSH_SERVICE="ssh"
 
-else
+elif systemctl cat sshd.service >/dev/null 2>&1; then
 
-    fail "Service SSH introuvable."
+    SSH_SERVICE="sshd"
+
+elif systemctl status ssh.service >/dev/null 2>&1; then
+
+    SSH_SERVICE="ssh"
+
+elif systemctl status sshd.service >/dev/null 2>&1; then
+
+    SSH_SERVICE="sshd"
 
 fi
 
-ok "SSH rechargé"
+
+if [ -n "$SSH_SERVICE" ]; then
+
+    info "Service OpenSSH détecté : ${SSH_SERVICE}.service"
+
+    if systemctl reload "$SSH_SERVICE" 2>/dev/null; then
+
+        ok "OpenSSH rechargé via ${SSH_SERVICE}.service"
+
+    elif systemctl restart "$SSH_SERVICE"; then
+
+        ok "OpenSSH redémarré via ${SSH_SERVICE}.service"
+
+    else
+
+        fail "Impossible de recharger/redémarrer ${SSH_SERVICE}.service"
+
+    fi
+
+else
+
+    #
+    # Fallback pour certaines installations où systemd
+    # ne permet pas de résoudre correctement l'alias.
+    #
+    if command -v service >/dev/null 2>&1; then
+
+        if service ssh reload >/dev/null 2>&1; then
+
+            SSH_SERVICE="ssh"
+            ok "OpenSSH rechargé via service ssh"
+
+        elif service sshd reload >/dev/null 2>&1; then
+
+            SSH_SERVICE="sshd"
+            ok "OpenSSH rechargé via service sshd"
+
+        else
+
+            fail "Service OpenSSH installé mais unité ssh/sshd introuvable."
+
+        fi
+
+    else
+
+        fail "Service OpenSSH introuvable."
+
+    fi
+
+fi
+
+
+#
+# Vérification finale : sshd doit toujours accepter
+# sa configuration après le reload.
+#
+if ! sshd -t; then
+
+    fail "Configuration SSH invalide après reload."
+
+fi
+
+ok "SSH rechargé et configuration validée"
 
 
 # ------------------------------------------------------------

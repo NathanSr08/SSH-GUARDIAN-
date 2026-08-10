@@ -6,11 +6,6 @@ import uuid
 
 from shared.config.settings import Settings
 
-from services.telegram.app.mfa_dedupe import (
-    mark_mfa_approval,
-    mark_mfa_denial,
-)
-
 
 def parse_duration(value):
     value = str(
@@ -599,27 +594,6 @@ class TelegramCommands:
                 )
             )
 
-            #
-            # Autorisation 1h faite depuis la demande MFA :
-            # ne pas envoyer ensuite une deuxième notification
-            # "Connexion SSH réussie".
-            #
-            raw_username = str(
-                result.get("username")
-                or ""
-            )
-
-            raw_ip = str(
-                result.get("ip")
-                or ""
-            )
-
-            mark_mfa_approval(
-                self.bus.client,
-                raw_username,
-                raw_ip,
-            )
-
             if telegram_message_id:
                 self.telegram.edit(
                     telegram_message_id,
@@ -722,29 +696,6 @@ class TelegramCommands:
                     result.get("city")
                     or "Inconnu"
                 )
-            )
-
-            #
-            # Le message MFA Telegram remplace la notification
-            # ssh.login.success pour CETTE connexion uniquement.
-            #
-            # MFA désactivé / bypassé => aucun marqueur =>
-            # la notification normale reste affichée.
-            #
-            raw_username = str(
-                result.get("username")
-                or ""
-            )
-
-            raw_ip = str(
-                result.get("ip")
-                or ""
-            )
-
-            mark_mfa_approval(
-                self.bus.client,
-                raw_username,
-                raw_ip,
             )
 
             if telegram_message_id:
@@ -855,24 +806,6 @@ class TelegramCommands:
                     result.get("city")
                     or "Inconnu"
                 )
-            )
-
-            #
-            # Le refus MFA Telegram est déjà la notification
-            # finale pour cette tentative.
-            #
-            # OpenSSH peut ensuite publier plusieurs événements
-            # correspondant au refus PAM. Ils seront ignorés
-            # quelques secondes par le consumer Telegram.
-            #
-            raw_ip = str(
-                result.get("ip")
-                or ""
-            )
-
-            mark_mfa_denial(
-                self.bus.client,
-                raw_ip,
             )
 
             if telegram_message_id:

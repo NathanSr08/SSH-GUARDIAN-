@@ -18,10 +18,6 @@ from services.telegram.app.messages import (
     format_ssh_event,
 )
 
-from services.telegram.app.mfa_dedupe import (
-    should_suppress_ssh_event,
-)
-
 
 def mfa_notifications(
     bus,
@@ -169,26 +165,66 @@ def notifications(
 
         for message_id, payload in messages:
             try:
-                if should_suppress_ssh_event(
-                    bus.client,
-                    payload,
+                #
+                # Lorsqu'une connexion vient d'être explicitement
+                # approuvée depuis Telegram MFA, le message MFA
+                # édité est déjà la notification de succès.
+                #
+                # On supprime donc UNE SEULE notification
+                # ssh.login.success correspondante.
+                #
+                # IMPORTANT :
+                # - MFA désactivé       => pas de marqueur
+                # - bypass utilisateur  => pas de marqueur
+                # - bypass IP           => pas de marqueur
+                # - bypass temporaire   => pas de marqueur
+                #
+                # Dans tous ces cas, la notification normale
+                # "Connexion SSH réussie" reste envoyée.
+                #
+                if (
+                    payload.get("event_type")
+                    == "ssh.login.success"
                 ):
-                    print(
-                        "[TELEGRAM MFA] "
-                        "notification SSH déjà couverte "
-                        "par la décision MFA "
-                        f"type={payload.get('event_type')} "
-                        f"user={payload.get('username')} "
-                        f"ip={payload.get('ip')}"
+                    username = str(
+                        payload.get("username")
+                        or ""
                     )
 
-                    bus.ack(
-                        Settings.SSH_ENRICHED_STREAM,
-                        "telegram-ssh",
-                        message_id,
+                    ip = str(
+                        payload.get("ip")
+                        or ""
                     )
 
-                    continue
+                    suppress_key = (
+                        "telegram:mfa:"
+                        "suppress_success:"
+                        f"{username}:"
+                        f"{ip}"
+                    )
+
+                    suppress = (
+                        bus.client.getdel(
+                            suppress_key
+                        )
+                    )
+
+                    if suppress:
+                        print(
+                            "[TELEGRAM MFA] "
+                            "ssh.login.success "
+                            "déjà notifié par MFA "
+                            f"user={username} "
+                            f"ip={ip}"
+                        )
+
+                        bus.ack(
+                            Settings.SSH_ENRICHED_STREAM,
+                            "telegram-ssh",
+                            message_id,
+                        )
+
+                        continue
 
                 message = format_ssh_event(
                     telegram,
