@@ -139,6 +139,58 @@ class Settings:
     )
 
     # ==========================================================
+    # MFA
+    # ==========================================================
+
+    MFA_EVENTS_STREAM = os.getenv(
+        "SG_MFA_EVENTS_STREAM",
+        "mfa.events",
+    )
+
+    MFA_COMMANDS_STREAM = os.getenv(
+        "SG_MFA_COMMANDS_STREAM",
+        "mfa.commands",
+    )
+
+    MFA_TIMEOUT_SECONDS = int(
+        os.getenv(
+            "SG_MFA_TIMEOUT_SECONDS",
+            "45",
+        )
+    )
+
+    MFA_ENABLED = (
+        os.getenv(
+            "SG_MFA_ENABLED",
+            "false",
+        ).lower()
+        == "true"
+    )
+
+    MFA_FAIL_MODE = os.getenv(
+        "SG_MFA_FAIL_MODE",
+        "deny",
+    ).lower()
+
+    MFA_BYPASS_USERS = {
+        value.strip()
+        for value in os.getenv(
+            "SG_MFA_BYPASS_USERS",
+            "",
+        ).split(",")
+        if value.strip()
+    }
+
+    MFA_BYPASS_IPS = {
+        value.strip()
+        for value in os.getenv(
+            "SG_MFA_BYPASS_IPS",
+            "",
+        ).split(",")
+        if value.strip()
+    }
+
+    # ==========================================================
     # GeoIP
     # ==========================================================
 

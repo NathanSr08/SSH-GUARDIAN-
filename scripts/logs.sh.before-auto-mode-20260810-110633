@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+
+set -u
+
+SERVICES=(
+    collector
+    geoip
+    security
+    firewall
+    storage
+    control
+    mfa
+    telegram
+    api
+    panel
+)
+
+UNITS=()
+
+for service in "${SERVICES[@]}"; do
+
+    if systemctl list-unit-files \
+        "ssh-guardian@${service}.service" \
+        --no-legend 2>/dev/null |
+        grep -q .
+    then
+
+        UNITS+=(
+            "-u"
+            "ssh-guardian@${service}.service"
+        )
+
+    fi
+
+done
+
+if [ "${#UNITS[@]}" -eq 0 ]; then
+    echo "Aucun service SSH Guardian trouvé."
+    exit 1
+fi
+
+exec journalctl \
+    "${UNITS[@]}" \
+    -f \
+    -o cat

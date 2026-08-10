@@ -74,3 +74,87 @@ def test_connection_opened():
     assert event.event_type == "ssh.connection.opened"
     assert event.ip == "95.174.64.122"
     assert event.username is None
+
+
+def test_connection_closed_authenticating_user():
+    event = parse_ssh_line(
+        "Connection closed by authenticating user "
+        "root 92.118.39.77 port 54728 [preauth]"
+    )
+
+    assert event is not None
+    assert (
+        event.event_type
+        == "ssh.connection.closed"
+    )
+    assert event.ip == "92.118.39.77"
+    assert event.username == "root"
+
+
+def test_connection_closed_authenticating_user_second_ip():
+    event = parse_ssh_line(
+        "Connection closed by authenticating user "
+        "root 195.178.110.227 port 43518 [preauth]"
+    )
+
+    assert event is not None
+    assert event.ip == "195.178.110.227"
+    assert event.username == "root"
+
+
+def test_parser_never_accepts_a_as_ip():
+    event = parse_ssh_line(
+        "Connection closed by authenticating user "
+        "root 92.118.39.77 port 54728 [preauth]"
+    )
+
+    assert event is not None
+    assert event.ip != "a"
+
+
+def test_accepted_keyboard_interactive_pam():
+    event = parse_ssh_line(
+        "Accepted keyboard-interactive/pam for admin "
+        "from 82.80.219.126 port 58497 ssh2"
+    )
+
+    assert event is not None
+    assert event.event_type == "ssh.login.success"
+    assert event.ip == "82.80.219.126"
+    assert event.username == "admin"
+
+
+def test_accepted_keyboard_interactive():
+    event = parse_ssh_line(
+        "Accepted keyboard-interactive for admin "
+        "from 82.80.219.126 port 58497 ssh2"
+    )
+
+    assert event is not None
+    assert event.event_type == "ssh.login.success"
+    assert event.ip == "82.80.219.126"
+    assert event.username == "admin"
+
+
+def test_failed_keyboard_interactive_pam():
+    event = parse_ssh_line(
+        "Failed keyboard-interactive/pam for admin "
+        "from 82.80.219.126 port 59215 ssh2"
+    )
+
+    assert event is not None
+    assert event.event_type == "ssh.login.failed"
+    assert event.ip == "82.80.219.126"
+    assert event.username == "admin"
+
+
+def test_failed_keyboard_interactive_without_pam():
+    event = parse_ssh_line(
+        "Failed keyboard-interactive for admin "
+        "from 82.80.219.126 port 59215 ssh2"
+    )
+
+    assert event is not None
+    assert event.event_type == "ssh.login.failed"
+    assert event.ip == "82.80.219.126"
+    assert event.username == "admin"

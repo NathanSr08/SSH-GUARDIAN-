@@ -1,7 +1,6 @@
 import os
 import socket
 import threading
-import time
 
 from shared.bus.redis_bus import RedisBus
 from shared.config.settings import Settings
@@ -20,6 +19,134 @@ from services.telegram.app.messages import (
 )
 
 
+def mfa_notifications(
+    bus,
+    telegram,
+    consumer,
+):
+    while True:
+        messages = bus.consume(
+            stream=Settings.MFA_EVENTS_STREAM,
+            group="telegram-mfa",
+            consumer=consumer,
+            count=20,
+            block_ms=1000,
+            group_start_id="$",
+        )
+
+        for message_id, payload in messages:
+            try:
+                event_type = payload.get(
+                    "event_type"
+                )
+
+                #
+                # Seules les nouvelles demandes
+                # doivent créer un message Telegram.
+                #
+                if event_type != "mfa.request.created":
+                    bus.ack(
+                        Settings.MFA_EVENTS_STREAM,
+                        "telegram-mfa",
+                        message_id,
+                    )
+                    continue
+
+                request_id = str(
+                    payload.get(
+                        "request_id",
+                        "",
+                    )
+                )
+
+                username = telegram.escape(
+                    payload.get(
+                        "username"
+                    )
+                )
+
+                ip = telegram.escape(
+                    payload.get(
+                        "ip"
+                    )
+                )
+
+                country = telegram.escape(
+                    payload.get(
+                        "country"
+                    )
+                )
+
+                city = telegram.escape(
+                    payload.get(
+                        "city"
+                    )
+                )
+
+                isp = telegram.escape(
+                    payload.get(
+                        "isp"
+                    )
+                )
+
+                text = (
+                    "🔐 <b>AUTORISATION SSH</b>\n\n"
+                    f"👤 Utilisateur : "
+                    f"<code>{username}</code>\n"
+                    f"🌐 IP : "
+                    f"<code>{ip}</code>\n"
+                    f"📍 Localisation : "
+                    f"{city}, {country}\n"
+                    f"🏢 FAI : {isp}\n\n"
+                    f"⏳ Expire dans "
+                    f"{Settings.MFA_TIMEOUT_SECONDS} secondes."
+                )
+
+                keyboard = {
+                    "inline_keyboard": [
+                        [
+                            {
+                                "text":
+                                    "✅ Autoriser",
+                                "callback_data":
+                                    f"mfa_approve:{request_id}",
+                            },
+                            {
+                                "text":
+                                    "❌ Refuser",
+                                "callback_data":
+                                    f"mfa_deny:{request_id}",
+                            },
+                        ],
+                        [
+                            {
+                                "text":
+                                    "⏱ Autoriser 1 heure",
+                                "callback_data":
+                                    f"mfa_1h:{request_id}",
+                            },
+                        ]
+                    ]
+                }
+
+                telegram.send(
+                    text,
+                    reply_markup=keyboard,
+                )
+
+                bus.ack(
+                    Settings.MFA_EVENTS_STREAM,
+                    "telegram-mfa",
+                    message_id,
+                )
+
+            except Exception as exc:
+                print(
+                    "[TELEGRAM MFA ERROR] "
+                    f"{exc}"
+                )
+
+
 def notifications(
     bus,
     telegram,
@@ -28,8 +155,7 @@ def notifications(
     while True:
 
         messages = bus.consume(
-            stream=
-                Settings.SSH_ENRICHED_STREAM,
+            stream=Settings.SSH_ENRICHED_STREAM,
             group="telegram-ssh",
             consumer=consumer,
             count=20,
@@ -62,8 +188,7 @@ def notifications(
                 )
 
         messages = bus.consume(
-            stream=
-                Settings.FIREWALL_EVENTS_STREAM,
+            stream=Settings.FIREWALL_EVENTS_STREAM,
             group="telegram-firewall",
             consumer=consumer,
             count=20,
@@ -74,11 +199,8 @@ def notifications(
         for message_id, payload in messages:
             try:
                 #
-                # Une action venant directement
-                # d'une commande Telegram possède déjà
-                # sa réponse RPC.
-                #
-                # On évite donc une deuxième notification.
+                # Une action lancée depuis Telegram
+                # a déjà sa réponse RPC.
                 #
                 if (
                     payload.get("source")
@@ -180,6 +302,22 @@ def main():
         telegram,
     )
 
+    #
+    # MFA notifications
+    #
+    threading.Thread(
+        target=mfa_notifications,
+        args=(
+            bus,
+            telegram,
+            consumer,
+        ),
+        daemon=True,
+    ).start()
+
+    #
+    # Telegram commands + callbacks
+    #
     threading.Thread(
         target=commands_loop,
         args=(

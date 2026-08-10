@@ -38,57 +38,28 @@ def parse_duration(value):
 
 
 HELP = """
-📜 <b>Commandes SSH Guardian</b>
+📜 <b>Commandes SSH-Guardian</b>
 
-📊 <b>Monitoring</b>
-/stats — Statistiques globales
-/top — Top des IP attaquantes
-/topcountries — Top des pays
-/search &lt;ip&gt; — Rechercher une IP
+📊 /stats
+🏆 /top
+🌍 /topcountries
+🔍 /search &lt;ip&gt;
 
-🚫 <b>Firewall</b>
-/bans — Afficher les IP bannies
-/unban &lt;ip&gt; — Débannir une IP
+🚫 /bans
+🔓 /unban &lt;ip&gt;
 
-🌍 <b>Pays</b>
-/block &lt;pays&gt; — Bloquer un pays
-/unblock &lt;pays&gt; — Débloquer un pays
-/countries — Liste des pays bloqués
+💻 /sessions
+📡 /active
+📡 /stream &lt;id&gt; [lignes]
 
-💻 <b>Sessions SSH</b>
-/sessions — Sessions SSH
-/active — Sessions actives
-/stream &lt;id&gt; [lignes] — Terminal en direct
-/killsession &lt;PID&gt; — Tuer une session
-/killallsessions — Tuer toutes les sessions
+🔪 /killsession &lt;PID&gt;
+⚡ /killallsessions
 
-🔐 <b>MFA SSH</b>
-/mfa — État et configuration MFA
-/mfastatus — État détaillé du MFA
-/mfaon — Activer le MFA
-/mfaoff — Désactiver le MFA
-/mfatimeout &lt;secondes&gt; — Modifier le délai de validation
+🛡 /block &lt;pays&gt;
+🔓 /unblock &lt;pays&gt;
+📜 /countries
 
-🔓 <b>Autorisations MFA temporaires</b>
-/mfaallow &lt;ip&gt; [durée] — Autoriser temporairement une IP
-/mfarevoke &lt;ip&gt; — Révoquer immédiatement une autorisation
-
-<b>Exemples :</b>
-<code>/mfatimeout 60</code>
-<code>/mfaallow 82.80.219.126 15m</code>
-<code>/mfaallow 82.80.219.126 1h</code>
-<code>/mfaallow 82.80.219.126 8h</code>
-<code>/mfaallow 82.80.219.126 1d</code>
-<code>/mfarevoke 82.80.219.126</code>
-
-⏱ <b>Formats de durée</b>
-<code>30s</code> = 30 secondes
-<code>15m</code> = 15 minutes
-<code>1h</code> = 1 heure
-<code>8h</code> = 8 heures
-<code>1d</code> = 1 jour
-
-❓ /help — Afficher cette aide
+❓ /help
 """
 
 
@@ -1176,6 +1147,7 @@ class TelegramCommands:
                 return
 
             ip = args[0]
+
             duration = 3600
 
             if len(args) > 1:
@@ -1186,13 +1158,13 @@ class TelegramCommands:
 
                 except ValueError:
                     self.telegram.send(
-                        "❌ <b>Durée invalide</b>\n\n"
+                        "❌ Durée invalide.\n\n"
                         "Formats acceptés :\n"
-                        "• <code>30s</code>\n"
-                        "• <code>15m</code>\n"
-                        "• <code>1h</code>\n"
-                        "• <code>8h</code>\n"
-                        "• <code>1d</code>"
+                        "<code>30s</code>\n"
+                        "<code>15m</code>\n"
+                        "<code>1h</code>\n"
+                        "<code>8h</code>\n"
+                        "<code>1d</code>"
                     )
                     return
 
@@ -1202,47 +1174,53 @@ class TelegramCommands:
                 duration=duration,
             )
 
-            if not response.get("ok"):
+            if response.get("ok"):
+                if duration >= 86400:
+                    duration_text = (
+                        f"{round(duration / 86400, 2)} j"
+                    )
+
+                elif duration >= 3600:
+                    duration_text = (
+                        f"{round(duration / 3600, 2)} h"
+                    )
+
+                elif duration >= 60:
+                    duration_text = (
+                        f"{round(duration / 60, 2)} min"
+                    )
+
+                else:
+                    duration_text = (
+                        f"{duration} s"
+                    )
+
                 self.telegram.send(
-                    "❌ <b>Autorisation impossible</b>\n\n"
+                    "🔓 <b>Autorisation MFA temporaire</b>
+
+"
+                    f"🌐 IP : <code>{html.escape(ip)}</code>
+"
+                    f"⏱ Durée : <b>{duration_text}</b>
+
+"
+                    "Les prochaines connexions depuis cette IP "
+                    "ne demanderont pas de validation MFA "
+                    "pendant cette durée."
+                )
+
+            else:
+                self.telegram.send(
+                    "❌ "
                     + html.escape(
                         str(
                             response.get(
                                 "error",
-                                "Erreur MFA",
+                                "Impossible d'ajouter l'autorisation.",
                             )
                         )
                     )
                 )
-                return
-
-            if duration >= 86400:
-                duration_text = (
-                    f"{round(duration / 86400, 2)} jour(s)"
-                )
-
-            elif duration >= 3600:
-                duration_text = (
-                    f"{round(duration / 3600, 2)} heure(s)"
-                )
-
-            elif duration >= 60:
-                duration_text = (
-                    f"{round(duration / 60, 2)} minute(s)"
-                )
-
-            else:
-                duration_text = (
-                    f"{duration} seconde(s)"
-                )
-
-            self.telegram.send(
-                "🔓 <b>Autorisation MFA temporaire</b>\n\n"
-                f"🌐 IP : <code>{html.escape(ip)}</code>\n"
-                f"⏱ Durée : <b>{duration_text}</b>\n\n"
-                "✅ Cette IP pourra se connecter sans nouvelle "
-                "validation MFA jusqu'à expiration de l'autorisation."
-            )
 
         elif command == "/mfarevoke":
             if not args:

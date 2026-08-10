@@ -119,16 +119,6 @@ BAN_DURATION_SECONDS="${SG_BAN_DURATION_SECONDS:-86400}"
 
 REDIS_URL="${SG_REDIS_URL:-redis://127.0.0.1:6379/0}"
 
-# ------------------------------------------------------------
-# MFA
-# ------------------------------------------------------------
-
-MFA_ENABLED="${SG_MFA_ENABLED:-false}"
-MFA_TIMEOUT_SECONDS="${SG_MFA_TIMEOUT_SECONDS:-45}"
-MFA_FAIL_MODE="${SG_MFA_FAIL_MODE:-deny}"
-MFA_BYPASS_USERS="${SG_MFA_BYPASS_USERS:-}"
-MFA_BYPASS_IPS="${SG_MFA_BYPASS_IPS:-}"
-
 
 # ------------------------------------------------------------
 # BANNIÈRE
@@ -455,20 +445,6 @@ SG_SECURITY_ACTIONS_STREAM=security.actions
 SG_FIREWALL_EVENTS_STREAM=firewall.events
 SG_CONTROL_COMMANDS_STREAM=control.commands
 
-SG_MFA_EVENTS_STREAM=mfa.events
-SG_MFA_COMMANDS_STREAM=mfa.commands
-
-
-# ------------------------------------------------------------
-# MFA
-# ------------------------------------------------------------
-
-SG_MFA_ENABLED=$MFA_ENABLED
-SG_MFA_TIMEOUT_SECONDS=$MFA_TIMEOUT_SECONDS
-SG_MFA_FAIL_MODE=$MFA_FAIL_MODE
-SG_MFA_BYPASS_USERS=$MFA_BYPASS_USERS
-SG_MFA_BYPASS_IPS=$MFA_BYPASS_IPS
-
 
 # ------------------------------------------------------------
 # Security
@@ -522,304 +498,6 @@ EOF
 chmod 600 "$ENV_FILE"
 
 ok ".env généré"
-
-
-# ------------------------------------------------------------
-# SSH GUARDIAN MFA
-# ------------------------------------------------------------
-
-info "Installation de SSH Guardian MFA..."
-
-MFA_SSH_BACKUP_DIR="$BACKUP_DIR/sshd-mfa-$(date +%Y%m%d-%H%M%S)"
-
-mkdir -p "$MFA_SSH_BACKUP_DIR"
-
-if [ -d /etc/ssh/sshd_config.d ]; then
-
-    cp -a \
-        /etc/ssh/sshd_config.d/. \
-        "$MFA_SSH_BACKUP_DIR/"
-
-fi
-
-
-if [ ! -f "$INSTALL_DIR/services/mfa/bin/pam_bridge.py" ]; then
-    fail "Bridge MFA absent : services/mfa/bin/pam_bridge.py"
-fi
-
-if [ ! -f "$INSTALL_DIR/services/mfa/app/runtime.py" ]; then
-    fail "Runtime MFA absent : services/mfa/app/runtime.py"
-fi
-
-
-# ------------------------------------------------------------
-# WRAPPER PAM MFA
-# ------------------------------------------------------------
-
-cat > /usr/local/bin/ssh-guardian-mfa <<'EOF'
-#!/usr/bin/env bash
-
-set -Eeuo pipefail
-
-PROJECT_FILE="${SG_PROJECT_FILE:-/etc/ssh-guardian/project-root}"
-
-if [ ! -f "$PROJECT_FILE" ]; then
-    echo "[MFA] project-root introuvable" >&2
-    exit 1
-fi
-
-PROJECT_ROOT="$(cat "$PROJECT_FILE")"
-
-if [ ! -d "$PROJECT_ROOT" ]; then
-    echo "[MFA] projet introuvable : $PROJECT_ROOT" >&2
-    exit 1
-fi
-
-ENV_FILE="$PROJECT_ROOT/.env"
-
-if [ -f "$ENV_FILE" ]; then
-    set -a
-    source "$ENV_FILE"
-    set +a
-fi
-
-export SG_PROJECT_ROOT="$PROJECT_ROOT"
-export PYTHONPATH="$PROJECT_ROOT"
-export PYTHONUNBUFFERED=1
-
-PYTHON="$PROJECT_ROOT/.venv/bin/python"
-
-if [ ! -x "$PYTHON" ]; then
-    PYTHON="/usr/bin/python3"
-fi
-
-exec "$PYTHON" \
-    "$PROJECT_ROOT/services/mfa/bin/pam_bridge.py"
-EOF
-
-chown root:root /usr/local/bin/ssh-guardian-mfa
-chmod 750 /usr/local/bin/ssh-guardian-mfa
-
-ok "Bridge PAM MFA installé"
-
-
-# ------------------------------------------------------------
-# BACKUP PAM
-# ------------------------------------------------------------
-
-MFA_PAM_BACKUP=""
-
-if [ -f /etc/pam.d/sshd ]; then
-
-    MFA_PAM_BACKUP="$BACKUP_DIR/pam-sshd.$(date +%Y%m%d-%H%M%S)"
-
-    cp -a \
-        /etc/pam.d/sshd \
-        "$MFA_PAM_BACKUP"
-
-    ok "Backup PAM créé : $MFA_PAM_BACKUP"
-
-else
-
-    warn "/etc/pam.d/sshd introuvable."
-
-fi
-
-
-# ------------------------------------------------------------
-# CONFIGURATION PAM SSH GUARDIAN
-# ------------------------------------------------------------
-
-cat > /etc/pam.d/sshd <<'EOF'
-# PAM configuration for the Secure Shell service
-
-# ============================================================
-# SSH Guardian MFA authentication
-# ============================================================
-#
-# Premier facteur :
-#   OpenSSH publickey
-#
-# Second facteur :
-#   SSH Guardian MFA via PAM / Telegram
-#
-# Aucun mot de passe Unix n'est demandé.
-#
-
-auth required pam_exec.so quiet /usr/local/bin/ssh-guardian-mfa
-auth required pam_permit.so
-
-# ------------------------------------------------------------
-# Account
-# ------------------------------------------------------------
-
-account required pam_nologin.so
-
-@include common-account
-
-
-# ------------------------------------------------------------
-# Session
-# ------------------------------------------------------------
-
-session [success=ok ignore=ignore module_unknown=ignore default=bad] pam_selinux.so close
-
-session required pam_loginuid.so
-session optional pam_keyinit.so force revoke
-
-@include common-session
-
-session optional pam_motd.so motd=/run/motd.dynamic
-session optional pam_motd.so noupdate
-
-session optional pam_mail.so standard noenv
-
-session required pam_limits.so
-
-session required pam_env.so
-session required pam_env.so envfile=/etc/default/locale
-
-session [success=ok ignore=ignore module_unknown=ignore default=bad] pam_selinux.so open
-
-
-# ------------------------------------------------------------
-# Password
-# ------------------------------------------------------------
-
-@include common-password
-EOF
-
-chmod 644 /etc/pam.d/sshd
-
-ok "PAM SSH Guardian configuré"
-
-
-# ------------------------------------------------------------
-# CONFIGURATION OPENSSH MFA
-# ------------------------------------------------------------
-
-mkdir -p /etc/ssh/sshd_config.d
-
-cat > /etc/ssh/sshd_config.d/05-ssh-guardian-mfa.conf <<'EOF'
-# SSH Guardian MFA
-#
-# Premier facteur : clé publique
-# Second facteur : PAM / Telegram
-
-UsePAM yes
-
-PubkeyAuthentication yes
-
-PasswordAuthentication no
-
-KbdInteractiveAuthentication yes
-
-AuthenticationMethods publickey,keyboard-interactive:pam
-EOF
-
-chmod 644 /etc/ssh/sshd_config.d/05-ssh-guardian-mfa.conf
-
-# ------------------------------------------------------------
-# ROLLBACK AUTOMATIQUE MFA / SSH
-# ------------------------------------------------------------
-
-info "Validation de la configuration SSH MFA..."
-
-if ! sshd -t; then
-
-    warn "Configuration SSH invalide."
-    warn "Rollback automatique MFA..."
-
-    #
-    # Restaurer PAM
-    #
-    if [ -n "${MFA_PAM_BACKUP:-}" ] \
-        && [ -f "$MFA_PAM_BACKUP" ]; then
-
-        cp -a \
-            "$MFA_PAM_BACKUP" \
-            /etc/pam.d/sshd
-
-        warn "Configuration PAM restaurée."
-
-    fi
-
-    #
-    # Restaurer sshd_config.d
-    #
-    if [ -n "${MFA_SSH_BACKUP_DIR:-}" ] \
-        && [ -d "$MFA_SSH_BACKUP_DIR" ]; then
-
-        rm -f \
-            /etc/ssh/sshd_config.d/05-ssh-guardian-mfa.conf
-
-        if [ -f "$MFA_SSH_BACKUP_DIR/05-ssh-guardian-mfa.conf" ]; then
-
-            cp -a \
-                "$MFA_SSH_BACKUP_DIR/05-ssh-guardian-mfa.conf" \
-                /etc/ssh/sshd_config.d/05-ssh-guardian-mfa.conf
-
-        fi
-
-        warn "Configuration OpenSSH MFA restaurée."
-
-    fi
-
-    #
-    # Vérifier que le rollback lui-même
-    # produit une configuration valide.
-    #
-    if sshd -t; then
-
-        warn "Rollback terminé avec succès."
-
-    else
-
-        fail "ERREUR CRITIQUE : SSH reste invalide après rollback."
-
-    fi
-
-    fail "Installation MFA annulée : configuration SSH invalide."
-
-fi
-
-ok "Configuration SSH MFA valide"
-
-
-ok "OpenSSH MFA configuré"
-
-
-# ------------------------------------------------------------
-# VALIDATION
-# ------------------------------------------------------------
-
-if ! sshd -t; then
-
-    fail "Configuration OpenSSH MFA invalide."
-
-fi
-
-ok "Configuration MFA/OpenSSH valide"
-
-
-# ------------------------------------------------------------
-# SYNCHRONISATION MFA RUNTIME REDIS
-# ------------------------------------------------------------
-
-info "Synchronisation de l'état MFA runtime..."
-
-case "${MFA_ENABLED,,}" in
-    true|1|yes|on)
-        redis-cli SET mfa:runtime:enabled 1 >/dev/null
-        ;;
-    *)
-        redis-cli SET mfa:runtime:enabled 0 >/dev/null
-        ;;
-esac
-
-redis-cli SET     mfa:runtime:timeout     "$MFA_TIMEOUT_SECONDS"     >/dev/null
-
-ok "MFA runtime synchronisé"
 
 
 # ------------------------------------------------------------
@@ -1109,7 +787,6 @@ SERVICES=()
 KNOWN_SERVICES=(
     collector
     geoip
-    mfa
     security
     firewall
     storage
@@ -1207,118 +884,6 @@ if [ -x "$INSTALL_DIR/scripts/stop-dev.sh" ]; then
         >/dev/null 2>&1 || true
 
 fi
-
-
-# ------------------------------------------------------------
-# NETTOYAGE PROCESSUS LEGACY SSH GUARDIAN
-# ------------------------------------------------------------
-
-info "Nettoyage des anciens processus SSH Guardian..."
-
-for service in \
-    collector \
-    geoip \
-    security \
-    firewall \
-    storage \
-    control \
-    mfa \
-    telegram \
-    api \
-    panel
-do
-
-    #
-    # Ne jamais tuer le processus actuellement géré
-    # par systemd s'il existe déjà.
-    #
-    SYSTEMD_PID="$(
-        systemctl show \
-            -p MainPID \
-            --value \
-            "ssh-guardian@$service" \
-            2>/dev/null \
-            || echo 0
-    )"
-
-    while read -r pid
-    do
-        [ -n "$pid" ] || continue
-
-        if [ "$pid" = "$SYSTEMD_PID" ]; then
-            continue
-        fi
-
-        warn "Ancien processus $service détecté : PID $pid"
-
-        kill "$pid" \
-            2>/dev/null \
-            || true
-
-    done < <(
-        pgrep -f \
-            "services\.${service}\.app\.main" \
-            || true
-    )
-
-done
-
-sleep 1
-
-#
-# Deuxième passe pour les processus qui
-# n'auraient pas répondu à SIGTERM.
-#
-for service in \
-    collector \
-    geoip \
-    security \
-    firewall \
-    storage \
-    control \
-    mfa \
-    telegram \
-    api \
-    panel
-do
-
-    SYSTEMD_PID="$(
-        systemctl show \
-            -p MainPID \
-            --value \
-            "ssh-guardian@$service" \
-            2>/dev/null \
-            || echo 0
-    )"
-
-    while read -r pid
-    do
-        [ -n "$pid" ] || continue
-
-        if [ "$pid" = "$SYSTEMD_PID" ]; then
-            continue
-        fi
-
-        warn "Kill forcé ancien processus $service : PID $pid"
-
-        kill -9 "$pid" \
-            2>/dev/null \
-            || true
-
-    done < <(
-        pgrep -f \
-            "services\.${service}\.app\.main" \
-            || true
-    )
-
-done
-
-rm -f \
-    "$INSTALL_DIR"/run/*.pid \
-    2>/dev/null \
-    || true
-
-ok "Anciens processus SSH Guardian nettoyés"
 
 
 # ------------------------------------------------------------
@@ -1450,7 +1015,6 @@ cat > /usr/local/bin/ssh-guardian-status <<'EOF'
 for SERVICE in \
     collector \
     geoip \
-    mfa \
     security \
     firewall \
     storage \
@@ -1501,7 +1065,6 @@ PROJECT_ROOT="$(
 for SERVICE in \
     collector \
     geoip \
-    mfa \
     security \
     firewall \
     storage \

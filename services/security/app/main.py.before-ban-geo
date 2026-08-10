@@ -160,33 +160,6 @@ def main() -> None:
                     if decision is not None:
 
                         #
-                        # Ajouter les informations GeoIP à toute
-                        # décision Security.
-                        #
-                        # Ainsi les bans normaux disposent aussi de
-                        # country / city / isp dans firewall.events.
-                        #
-                        decision.setdefault(
-                            "country",
-                            geo.get("country"),
-                        )
-
-                        decision.setdefault(
-                            "country_code",
-                            geo.get("country_code"),
-                        )
-
-                        decision.setdefault(
-                            "city",
-                            geo.get("city"),
-                        )
-
-                        decision.setdefault(
-                            "isp",
-                            geo.get("isp"),
-                        )
-
-                        #
                         # Exposer l'état courant des tentatives
                         # aux autres microservices.
                         #

@@ -690,39 +690,6 @@ def mfa_revoke_ip(
     )
 
 
-@app.get("/mfa/requests")
-def mfa_requests(
-    status: str | None = Query(
-        default=None
-    ),
-    limit: int = Query(
-        default=100,
-        ge=1,
-        le=500,
-    ),
-):
-    if status not in {
-        None,
-        "pending",
-        "approved",
-        "denied",
-        "expired",
-        "cancelled",
-    }:
-        raise HTTPException(
-            status_code=400,
-            detail="Statut MFA invalide",
-        )
-
-    return mfa_execute(
-        "requests",
-        {
-            "status": status,
-            "limit": limit,
-        },
-    )
-
-
 @app.get("/mfa/request/{request_id}")
 def mfa_request(
     request_id: str,
@@ -739,7 +706,6 @@ def mfa_request(
 @app.post("/mfa/request/{request_id}/approve")
 def mfa_approve(
     request_id: str,
-    source: str = Query(default="api"),
 ):
     return mfa_execute(
         "approve",
@@ -748,7 +714,7 @@ def mfa_approve(
                 request_id,
 
             "source":
-                source,
+                "api",
         },
     )
 
@@ -756,7 +722,6 @@ def mfa_approve(
 @app.post("/mfa/request/{request_id}/approve-temporary")
 def mfa_approve_temporary(
     request_id: str,
-    source: str = Query(default="api"),
     duration: int = Query(
         3600,
         ge=1,
@@ -773,7 +738,7 @@ def mfa_approve_temporary(
                 duration,
 
             "source":
-                source,
+                "api",
         },
     )
 
@@ -781,7 +746,6 @@ def mfa_approve_temporary(
 @app.post("/mfa/request/{request_id}/deny")
 def mfa_deny(
     request_id: str,
-    source: str = Query(default="api"),
 ):
     return mfa_execute(
         "deny",
@@ -790,7 +754,7 @@ def mfa_deny(
                 request_id,
 
             "source":
-                source,
+                "api",
         },
     )
 

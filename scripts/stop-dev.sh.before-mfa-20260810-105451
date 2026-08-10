@@ -8,7 +8,6 @@ RUN_DIR="$PROJECT_ROOT/run"
 SERVICES=(
     collector
     geoip
-    mfa
     security
     firewall
     storage

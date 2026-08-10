@@ -69,7 +69,6 @@ start_service() {
 
 start_service collector services.collector.app.main
 start_service geoip services.geoip.app.main
-start_service mfa services.mfa.app.main
 start_service security services.security.app.main
 start_service firewall services.firewall.app.main
 start_service storage services.storage.app.main
@@ -87,7 +86,6 @@ echo
 for SERVICE in \
     collector \
     geoip \
-    mfa \
     security \
     firewall \
     storage \
