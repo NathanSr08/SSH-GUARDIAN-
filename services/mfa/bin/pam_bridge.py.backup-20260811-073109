@@ -246,6 +246,35 @@ def main():
         )
 
     # --------------------------------------------------------
+    # Bypass permanent utilisateur (.env)
+    # --------------------------------------------------------
+
+    if (
+        username
+        in Settings.MFA_BYPASS_USERS
+    ):
+        log(
+            "bypass=permanent_user"
+        )
+
+        allow()
+
+    # --------------------------------------------------------
+    # Bypass permanent IP (.env)
+    # --------------------------------------------------------
+
+    if (
+        ip
+        and ip
+        in Settings.MFA_BYPASS_IPS
+    ):
+        log(
+            "bypass=permanent_ip"
+        )
+
+        allow()
+
+    # --------------------------------------------------------
     # IP distante obligatoire
     # --------------------------------------------------------
 
@@ -280,76 +309,6 @@ def main():
         runtime = MFARuntime(
             bus.client
         )
-
-        # ----------------------------------------------------
-        # PRIORITE SECURITE
-        # ----------------------------------------------------
-        #
-        # Le service Security crée cette clé lorsqu'une IP
-        # appartient à un pays actuellement bloqué :
-        #
-        #   security:blocked-country:<IP>
-        #
-        # Une interdiction de sécurité doit TOUJOURS avoir
-        # priorité sur :
-        #
-        #   - MFA
-        #   - bypass MFA temporaire
-        #
-        # Dans ce cas aucune demande MFA ne doit être créée.
-        #
-        blocked_country_key = (
-            f"security:blocked-country:{ip}"
-        )
-
-        if bus.client.exists(
-            blocked_country_key
-        ):
-            log(
-                "security=blocked_country "
-                f"ip={ip} "
-                "mfa_request=skipped"
-            )
-
-            deny(
-                "blocked_country"
-            )
-
-        # ----------------------------------------------------
-        # Bypass permanent utilisateur (.env)
-        # ----------------------------------------------------
-        #
-        # IMPORTANT :
-        # ce bypass est évalué uniquement APRÈS les règles
-        # Security. Un pays/IP bloqué reste donc bloqué.
-        #
-        if (
-            username
-            in Settings.MFA_BYPASS_USERS
-        ):
-            log(
-                "bypass=permanent_user"
-            )
-
-            allow()
-
-        # ----------------------------------------------------
-        # Bypass permanent IP (.env)
-        # ----------------------------------------------------
-        #
-        # Même priorité :
-        #
-        # Security > bypass permanent > MFA
-        #
-        if (
-            ip
-            in Settings.MFA_BYPASS_IPS
-        ):
-            log(
-                "bypass=permanent_ip"
-            )
-
-            allow()
 
         # ----------------------------------------------------
         # MFA runtime ON/OFF
