@@ -302,8 +302,66 @@ def main():
             f"security:blocked-country:{ip}"
         )
 
-        if bus.client.exists(
-            blocked_country_key
+        country_policy_key = (
+            f"security:country-policy:{ip}"
+        )
+
+        #
+        # Security / GeoIP et PAM travaillent en parallèle.
+        #
+        # On attend brièvement la décision pays calculée par
+        # Security avant de créer une demande MFA.
+        #
+        # Cela évite :
+        #
+        #   autorisation MFA
+        #   puis ban blocked_country juste après.
+        #
+        country_policy = None
+
+        for _ in range(20):
+
+            try:
+                raw_policy = bus.client.get(
+                    country_policy_key
+                )
+            except Exception:
+                raw_policy = None
+
+            if raw_policy:
+
+                if isinstance(
+                    raw_policy,
+                    bytes,
+                ):
+                    raw_policy = raw_policy.decode(
+                        "utf-8"
+                    )
+
+                country_policy = str(
+                    raw_policy
+                )
+
+                break
+
+            #
+            # Compatibilité avec l'ancienne clé Security.
+            #
+            if bus.client.exists(
+                blocked_country_key
+            ):
+                country_policy = "blocked"
+                break
+
+            time.sleep(
+                0.05
+            )
+
+        if (
+            country_policy == "blocked"
+            or bus.client.exists(
+                blocked_country_key
+            )
         ):
             log(
                 "security=blocked_country "
@@ -313,6 +371,18 @@ def main():
 
             deny(
                 "blocked_country"
+            )
+
+        if country_policy == "allowed":
+            log(
+                "security=country_allowed "
+                f"ip={ip}"
+            )
+
+        elif country_policy is None:
+            log(
+                "security=country_policy_timeout "
+                f"ip={ip}"
             )
 
         # ----------------------------------------------------

@@ -90,6 +90,34 @@ def main() -> None:
                         get_blocked_countries()
                     )
 
+                    #
+                    # Expose immédiatement la décision pays à PAM.
+                    # PAM attend brièvement cette clé avant de créer
+                    # une demande MFA afin d'éviter la race :
+                    #
+                    #   MFA autorisé
+                    #   puis ban blocked_country quelques ms après.
+                    #
+                    country_policy_key = (
+                        f"security:country-policy:{event.ip}"
+                    )
+
+                    country_blocked = bool(
+                        country_code
+                        and country_code
+                        in blocked_countries
+                    )
+
+                    bus.client.set(
+                        country_policy_key,
+                        (
+                            "blocked"
+                            if country_blocked
+                            else "allowed"
+                        ),
+                        ex=30,
+                    )
+
                     decision = None
 
                     #
