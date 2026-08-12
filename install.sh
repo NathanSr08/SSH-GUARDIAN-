@@ -264,10 +264,37 @@ else
         requests \
         fastapi \
         "uvicorn[standard]" \
-        pytest \
         typeguard
 
 fi
+
+
+# ------------------------------------------------------------
+# DÉPENDANCES DE TEST
+# ------------------------------------------------------------
+
+if [ -d "$INSTALL_DIR/tests" ]; then
+
+    info "Installation des dépendances de test..."
+
+    if [ -f "$INSTALL_DIR/requirements-test.txt" ]; then
+
+        "$VENV_DIR/bin/pip" install \
+            -r "$INSTALL_DIR/requirements-test.txt"
+
+    else
+
+        warn "requirements-test.txt absent : installation du socle de test"
+
+        "$VENV_DIR/bin/pip" install \
+            pytest \
+            coverage \
+            httpx2
+
+    fi
+
+fi
+
 
 ok "Environnement Python prêt"
 
@@ -276,14 +303,19 @@ ok "Environnement Python prêt"
 # TEST IMPORTS
 # ------------------------------------------------------------
 
-"$VENV_DIR/bin/python" - <<'PY'
+"$VENV_DIR/bin/python" - <<'PYIMPORTS'
 import redis
 import requests
 import fastapi
 import uvicorn
+import pytest
+import coverage
 
-print("Imports Python OK")
-PY
+# Vérifie aussi la dépendance HTTP utilisée par Starlette/FastAPI.
+from fastapi.testclient import TestClient
+
+print("Imports runtime + tests OK")
+PYIMPORTS
 
 ok "Dépendances Python vérifiées"
 
@@ -522,6 +554,61 @@ EOF
 chmod 600 "$ENV_FILE"
 
 ok ".env généré"
+
+
+# ------------------------------------------------------------
+# PY COMPILE
+# ------------------------------------------------------------
+
+info "Vérification syntaxique Python..."
+
+cd "$INSTALL_DIR"
+
+while IFS= read -r -d '' file
+do
+
+    "$VENV_DIR/bin/python" \
+        -m py_compile \
+        "$file"
+
+done < <(
+    find services shared \
+        -type f \
+        -name '*.py' \
+        -print0
+)
+
+ok "Syntaxe Python valide"
+
+
+# ------------------------------------------------------------
+# TESTS
+# ------------------------------------------------------------
+
+if [ -d "$INSTALL_DIR/tests" ]; then
+
+    info "Tests SSH Guardian..."
+
+    set +e
+
+    PYTHONPATH="$INSTALL_DIR" \
+        "$VENV_DIR/bin/python" \
+        -m pytest \
+        -q
+
+    TEST_STATUS=$?
+
+    set -e
+
+    if [ "$TEST_STATUS" -eq 0 ]; then
+        ok "Tests réussis"
+    else
+        fail "Tests SSH Guardian échoués : installation annulée avant modification de PAM/OpenSSH."
+    fi
+
+fi
+
+
 
 
 # ------------------------------------------------------------
@@ -1211,60 +1298,6 @@ done
 
 if [ "${#SERVICES[@]}" -eq 0 ]; then
     fail "Aucun microservice trouvé."
-fi
-
-
-# ------------------------------------------------------------
-# PY COMPILE
-# ------------------------------------------------------------
-
-info "Vérification syntaxique Python..."
-
-cd "$INSTALL_DIR"
-
-while IFS= read -r -d '' file
-do
-
-    "$VENV_DIR/bin/python" \
-        -m py_compile \
-        "$file"
-
-done < <(
-    find services shared \
-        -type f \
-        -name '*.py' \
-        -print0
-)
-
-ok "Syntaxe Python valide"
-
-
-# ------------------------------------------------------------
-# TESTS
-# ------------------------------------------------------------
-
-if [ -d "$INSTALL_DIR/tests" ]; then
-
-    info "Tests SSH Guardian..."
-
-    set +e
-
-    PYTHONPATH="$INSTALL_DIR" \
-        "$VENV_DIR/bin/python" \
-        -m pytest \
-        -q
-
-    TEST_STATUS=$?
-
-    set -e
-
-    if [ "$TEST_STATUS" -eq 0 ]; then
-        ok "Tests réussis"
-    else
-        warn "Certains tests ont échoué."
-        warn "Installation poursuivie pour permettre le diagnostic."
-    fi
-
 fi
 
 
