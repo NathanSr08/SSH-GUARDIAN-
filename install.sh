@@ -1661,7 +1661,7 @@ echo "  $PANEL_TOKEN"
 echo
 echo "Tunnel Windows :"
 echo
-echo "  ssh -i C:\\Users\\natha\\Downloads\\f.pem -N -L ${PANEL_PORT}:127.0.0.1:${PANEL_PORT} admin@TON_SERVEUR"
+echo '  ssh -i "C:\chemin\vers\votre-cle.pem" -N -L ${PANEL_PORT}:127.0.0.1:${PANEL_PORT} admin@VOTRE_SERVEUR'
 echo
 echo "Puis navigateur :"
 echo
