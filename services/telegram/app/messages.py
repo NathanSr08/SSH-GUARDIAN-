@@ -116,6 +116,32 @@ def attempt_text(
 # ============================================================
 #
 
+def is_blocked_country_ip(
+    client: TelegramClient,
+    ip: str,
+) -> bool:
+    """
+    Retourne True si Security a marqué cette IP comme provenant
+    d'un pays bloqué.
+    """
+
+    if not ip:
+        return False
+
+    key = f"security:blocked-country:{ip}"
+
+    for _ in range(10):
+        try:
+            if client.bus.client.exists(key):
+                return True
+        except Exception:
+            return False
+
+        time.sleep(0.05)
+
+    return False
+
+
 def extract_ssh_port(
     event: dict,
 ) -> str | None:
@@ -300,6 +326,24 @@ def format_ssh_event(
     #
     if event_type == "ssh.connection.opened":
         return None
+
+    #
+    # Une IP provenant d'un pays bloqué est bannie dès
+    # ssh.connection.opened. Les événements closed/reset/failed
+    # qui suivent appartiennent à cette même connexion et ne
+    # doivent pas produire une seconde notification Telegram.
+    #
+    if event_type in {
+        "ssh.connection.closed",
+        "ssh.connection.reset",
+        "ssh.login.failed",
+        "ssh.login.invalid_user",
+    }:
+        if is_blocked_country_ip(
+            client,
+            raw_ip,
+        ):
+            return None
 
     #
     # --------------------------------------------------------
@@ -622,14 +666,21 @@ def format_firewall_event(
         else "?"
     )
 
-    attempts = client.escape(
-        str(
-            event.get("attempts")
-            if event.get("attempts")
-            is not None
-            else "?"
-        )
+    attempts_raw = event.get("attempts")
+
+    attempts = (
+        client.escape(str(attempts_raw))
+        if attempts_raw is not None
+        else None
     )
+
+    attempts_line = ""
+
+    if reason != "blocked_country" and attempts is not None:
+        attempts_line = (
+            f"🔢 Tentatives : "
+            f"<b>{attempts}</b>\n"
+        )
 
     return (
         "🚫 <b>IP bannie</b>\n\n"
@@ -641,8 +692,7 @@ def format_firewall_event(
         f"{isp}\n\n"
         f"⚠️ Raison : "
         f"{reason}\n"
-        f"🔢 Tentatives : "
-        f"<b>{attempts}</b>\n"
+        f"{attempts_line}"
         f"⏱ Durée : "
         f"<b>{hours} h</b>\n"
         f"🔥 Firewall : "
