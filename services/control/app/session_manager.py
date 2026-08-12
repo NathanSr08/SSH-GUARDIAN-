@@ -188,6 +188,7 @@ class SessionManager:
                 "r",
                 encoding="utf-8",
                 errors="ignore",
+                newline="",
             ) as handle:
                 raw = handle.read()
 
@@ -206,7 +207,7 @@ class SessionManager:
 
         cleaned = []
 
-        for line in text.splitlines():
+        for line in text.split("\n"):
             if "\r" in line:
                 parts = [
                     part

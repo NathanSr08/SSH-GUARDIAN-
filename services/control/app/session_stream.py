@@ -55,7 +55,7 @@ def clean_terminal_text(raw: str) -> str:
     # Supprimer le header/footer généré par `script`
     cleaned_lines = []
 
-    for raw_line in text.splitlines():
+    for raw_line in text.split("\n"):
         line = raw_line
 
         if line.startswith("Script started on "):
