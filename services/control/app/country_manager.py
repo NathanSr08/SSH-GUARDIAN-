@@ -166,7 +166,9 @@ class CountryManager:
                     # supprimer également l'état Redis.
                     #
                     self.bus.client.delete(
-                        f"security:blocked-country:{ip}"
+                        f"security:blocked-country:{ip}",
+                        f"security:country-policy:{ip}",
+                        f"security:attempts:{ip}",
                     )
 
                     #
@@ -229,8 +231,23 @@ class CountryManager:
         #    on ne veut pas laisser une ancienne clé Redis.
         #
         for ip in ips:
+            #
+            # Un /unblock pays doit remettre complètement
+            # l'IP dans un état propre.
+            #
+            # On supprime :
+            #
+            #   - le marqueur de pays bloqué
+            #   - la décision country-policy mise en cache
+            #   - le compteur normal de tentatives SSH
+            #
+            # Ainsi une IP débannie ne peut pas rester
+            # artificiellement proche du seuil de ban.
+            #
             self.bus.client.delete(
-                f"security:blocked-country:{ip}"
+                f"security:blocked-country:{ip}",
+                f"security:country-policy:{ip}",
+                f"security:attempts:{ip}",
             )
 
         lines = [
