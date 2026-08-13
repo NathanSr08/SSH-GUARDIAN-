@@ -199,3 +199,15 @@ def test_parser_ignores_invalid_or_unknown_lines(
         parse_ssh_line(line)
         is None
     )
+
+
+def test_connection_reset_direct_ip():
+    event = parse_ssh_line(
+        "sshd[1]: Connection reset by "
+        "213.5.193.9 port 41745"
+    )
+
+    assert event is not None
+    assert event.event_type == "ssh.connection.reset"
+    assert event.ip == "213.5.193.9"
+    assert event.username is None

@@ -74,6 +74,12 @@ CONNECTION_RESET_AUTH_USER_RE = re.compile(
     + IP_PATTERN
 )
 
+CONNECTION_RESET_DIRECT_RE = re.compile(
+    r"Connection reset by "
+    + IP_PATTERN
+    + r" port (\d+)"
+)
+
 #
 # Exemple :
 #
@@ -315,6 +321,24 @@ def parse_ssh_line(
             "ssh.connection.reset",
             ip,
             username,
+            line,
+        )
+
+    #
+    # Reset direct sans tentative d'authentification.
+    #
+    match = (
+        CONNECTION_RESET_DIRECT_RE
+        .search(line)
+    )
+
+    if match:
+        ip, port = match.groups()
+
+        return build_event(
+            "ssh.connection.reset",
+            ip,
+            None,
             line,
         )
 
